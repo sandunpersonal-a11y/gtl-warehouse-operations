@@ -1403,6 +1403,23 @@ function requestDiagnosticPayroll(month){
     render();
   });
 }
+const publicVehicleCrew=new Map();
+function requestPublicVehicleCrew(visit){
+  if(!publishedCostsClient||!visit.crewPrivate||publicVehicleCrew.has(visit.id))return;
+  const request={status:'loading',crew:null};
+  publicVehicleCrew.set(visit.id,request);
+  void publishedCostsClient.rpc('gtl_public_vehicle_crew',{operation_id:visit.id}).then(({data,error})=>{
+    if(error)throw error;
+    if(publicVehicleCrew.get(visit.id)!==request)return;
+    request.status=data?'ready':'unavailable';
+    request.crew=data;
+    if(el('vehicle').value===visit.id)render();
+  }).catch(()=>{
+    if(publicVehicleCrew.get(visit.id)!==request)return;
+    request.status='unavailable';
+    if(el('vehicle').value===visit.id)render();
+  });
+}
 function visibleVehicleCrew(visit){
   if(!payrollUser)return null;
   if(!visit.crewPrivate&&!canManagePayroll())return null;
@@ -1502,11 +1519,13 @@ async function refreshPublishedLabour(){
 function publishedRoleTable(visits,showVehicleCrew=false){
   if(!visits.length)return '';
   const selected=showVehicleCrew?visits[0]:null;
-  if(canManagePayroll()||selected?.crewPrivate){
+  if(canManagePayroll()){
     for(const period of new Set(visits.filter(visit=>visit.crewPrivate).map(visit=>visit.start.slice(0,7))))requestMovementCrew(period);
   }
-  const selectedCrew=selected?visibleVehicleCrew(selected):null;
-  const crewStatus=selected?.crewPrivate&&payrollUser?movementCrewByMonth.get(selected.start.slice(0,7))?.status:null;
+  if(selected)requestPublicVehicleCrew(selected);
+  const publicCrew=selected?publicVehicleCrew.get(selected.id):null;
+  const selectedCrew=selected?(selected.crewPrivate?(visibleVehicleCrew(selected)??publicCrew?.crew):selected):null;
+  const crewStatus=selected?.crewPrivate&&!selectedCrew?publicCrew?.status:null;
   const body=crewRoles.map(([role,field])=>{
     let dayMinutes=0,otMinutes=0,dayCost=0,otCost=0,priced=false;
     const staff=new Set();
@@ -1767,6 +1786,7 @@ async function refreshMovementOperations(){
   }
   diagnosticPayrollByMonth.clear();
   operations=[...combined.values()];
+  publicVehicleCrew.clear();
   movementCrewByMonth.clear();
   const options=[...new Set(operations.map(item=>item.customer))].sort();
   el('customer').innerHTML=optionList(options);
