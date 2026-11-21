@@ -1,7 +1,7 @@
 {
   "id": "./",
-  "name": "GTL Warehouse Operations & Job Costing",
-  "short_name": "GTL Warehouse",
+  "name": "Job Costing",
+  "short_name": "Job Costing",
   "start_url": "./",
   "scope": "./",
   "display": "standalone",

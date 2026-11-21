@@ -1,8 +1,8 @@
 // Cache the dashboard only. Live exchange-rate requests stay on the network.
 const prefix='gtl-dashboard:'+self.registration.scope+':';
-const cacheName=prefix+'v5-golden-cost-logo';
+const cacheName=prefix+'v6-job-costing';
 self.addEventListener('install',event=>{
-  event.waitUntil(caches.open(cacheName).then(cache=>cache.addAll(['./index.html','./manifest.webmanifest?v=golden-cost-logo','./icon-192.png?v=golden-cost-logo','./icon-512.png?v=golden-cost-logo','./logo-header.png?v=golden-cost-logo'])));
+  event.waitUntil(caches.open(cacheName).then(cache=>cache.addAll(['./index.html','./manifest.webmanifest?v=job-costing','./icon-192.png?v=golden-cost-logo','./icon-512.png?v=golden-cost-logo','./logo-header.png?v=golden-cost-logo'])));
 });
 self.addEventListener('activate',event=>{
   event.waitUntil(caches.keys().then(keys=>Promise.all(keys.filter(key=>key.startsWith(prefix)&&key!==cacheName).map(key=>caches.delete(key)))).then(()=>self.clients.claim()));
