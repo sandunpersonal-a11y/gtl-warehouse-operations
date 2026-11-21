@@ -644,6 +644,12 @@ button,input,select,textarea,::file-selector-button{font-family:inherit}
 #charts .cost-chart-row .other-cost-chart{background:#f8fafc}
 #charts .cost-chart-row .other-cost-chart:not(.unloading-cost-chart){border-top-color:#68568d}
 #charts .cost-chart-row .other-cost-chart.unloading-cost-chart{border-top-color:#506877}
+#charts .category-cost-chart{display:block}
+.category-cost-chart .muted{margin:3px 0 8px}
+.category-cost-row{display:grid;grid-template-columns:auto minmax(12px,1fr) auto;align-items:center;gap:5px;margin:6px 0;font-size:.72rem}
+.category-cost-row .average-time-track{display:block;height:7px}
+.category-cost-row strong{white-space:nowrap}
+.shift-chart-hours{display:block;font-size:.62rem;line-height:1.2}
 </style>
 <header class="dashboard-header"><div class="job-header-actions"><div class="header-scope"><label><span>Customer</span><select id="customer"></select></label>
 <label><span>Job</span><select id="job"></select></label></div><button id="openCosts" type="button" aria-haspopup="dialog"><svg class="ui-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" aria-hidden="true"><rect x="5" y="3" width="14" height="18" rx="2"/><path d="M8 8h8m-8 4h2m4 0h2m-8 4h2m4 0h2"/></svg>Job Costing</button><p id="payrollSession" role="status"></p><button id="payrollSignIn" type="button">Payroll sign in</button><button id="payrollSignOut" type="button" hidden>Sign out</button></div><div class="dashboard-title"><img class="gtl-header-logo" src="./icon-512.png?v=cost" width="42" height="42" alt="GTL logo"><div><p class="dashboard-brand">GTL · GLOBAL PARK</p><h1>Warehouse Operations &amp; Job Costing</h1><small>Vehicle turnaround, crew hours and job costs</small></div></div>
@@ -728,7 +734,7 @@ button,input,select,textarea,::file-selector-button{font-family:inherit}
 <label>ISO Week<input id="chargeWeek" type="week"></label>
 <label>Charge Unit<select id="chargeUnit"></select></label>
 <label>Quantity<input id="chargeQuantity" type="number" min="0.001" step="any"></label>
-<label>Operation<select id="chargeDirection"><option value="U">Unloading</option><option value="L">Loading</option><option value="UL">Both (U/L Operation)</option></select></label>
+<label>Operation<select id="chargeDirection"><option value="U">Unloading</option><option value="L">Loading</option><option value="UL" selected>Both (U/L Operation)</option></select></label>
 <label>Vehicle<select id="chargeVehicle"></select></label>
 <div class="charge-rate-pair"><label>Currency<select id="chargeCurrency"><option>LKR</option><option>USD</option></select></label>
 <label>Rate / unit<input id="chargeRate" type="number" min="0" step="any"></label></div>
@@ -1159,7 +1165,10 @@ function observeChartFills(){
     chartFillObserver.observe(chart);
   }
 }
-const otCostSeries=[{label:'OT labour',color:'#dd9844',chip:'#ffebce'}];
+const labourCostSeries=[
+  {label:'Day labour',color:'#238168',chip:'#daf0e9'},
+  {label:'OT labour',color:'#dd9844',chip:'#ffebce'}
+];
 const otherCostSeries=[
   {label:'Area',color:'#317aa6',chip:'#dceefa'},
   {label:'Equipment',color:'#7861a9',chip:'#ebe4f8'},
@@ -1179,45 +1188,64 @@ function renderCostChart(items,direction,series,field){
     const segments=series.map(({label,color},index)=>{
       const value=values[index];
       if(!(value>0))return '';
-      const description=esc(label+' · '+money(value));
+      const description=esc(label+' · '+money(value)+(index<2?' · '+duration(item.hours[index]):''));
       return `<span class="grouped-cost-bar" tabindex="0" style="height:${100*value/(step*4)}%;background:${color}"
         aria-label="${esc(item.kind)} · ${description}"><span class="segment-tooltip">${description}</span></span>`;
     }).join('');
     return `<div class="vehicle-cost-column"><div class="vehicle-cost-track grouped-cost-track">
-      ${segments||'<span class="muted">—</span>'}</div><b>${esc(item.kind)}</b>${field!=='other'&&!item.otComplete?' <small>*</small>':''}</div>`;
+      ${segments||'<span class="muted">—</span>'}</div><b>${esc(item.kind)}</b>${!item.labourComplete?' <small>*</small>':''}
+      <small class="shift-chart-hours">Day ${duration(item.hours[0])} · OT ${duration(item.hours[1])}</small></div>`;
   }).join('');
-  const other=field==='other';
-  return `<article class="panel vehicle-cost-chart ${direction.toLowerCase()}-cost-chart${other?' other-cost-chart':''}">
-    <h2>${direction} ${field==='combined'?'Costs':other?'Other Costs':'OT Cost'}${field==='combined'?' · '+esc(items[0].vehicle):' by Vehicle Type'}</h2>
+  return `<article class="panel vehicle-cost-chart ${direction.toLowerCase()}-cost-chart">
+    <h2>${direction} ${field==='combined'?'Costs':'Labour Cost'}${field==='combined'?' · '+esc(items[0].vehicle):' by Vehicle Type'}</h2>
     <div class="vehicle-cost-legend"><b>LKR</b>${legend}</div>
     <div class="vehicle-cost-plot"><div class="vehicle-cost-axis">${axis}</div><div class="vehicle-cost-bars">${bars}</div></div>
-    <p class="muted">${other?'Vehicle costs only. Excludes job-wide dated charges.':'* Known costs only.'}</p>
+    <p class="muted">Hours are vehicle time. * Known costs only.</p>
+  </article>`;
+}
+function renderOtherCostChart(label,totals,monthly){
+  const amounts=[totals.areaCost,...totals.categoryCosts.map(category=>category.amount)];
+  const peak=Math.max(1,...amounts);
+  const bars=otherCostSeries.map(({label,color},index)=>{
+    const value=amounts[index];
+    const description=label+' · '+money(value);
+    return `<div class="category-cost-row" title="${esc(description)}">
+      <span>${label}</span><span class="average-time-track" aria-hidden="true"><i style="width:${100*value/peak}%;background:${color}"></i></span>
+      <strong>${value?money(value):'—'}</strong></div>`;
+  }).join('');
+  return `<article class="panel vehicle-cost-chart category-cost-chart other-cost-chart ${label.toLowerCase()}-cost-chart">
+    <h2>${label} Other Costs</h2>
+    <p class="muted">${monthly?'Monthly costs':'Estimated area for this selection'}</p>
+    <div>${bars}</div>
   </article>`;
 }
 let previousChartMarkup;
 function renderVehicleCostCharts(rows,selected){
   const charts=['L','U'].map(direction=>{
     const filtered=rows.filter(row=>row.direction===direction);
-    if(!filtered.length)return [];
+    if(el('direction').value&&el('direction').value!==direction)return [];
+    const totals=operationCosts(selected,filtered,direction);
+    if(!filtered.length&&!totals.operatingCost)return [];
     const order=['LRY','20GP','40HC'];
     const kinds=[...new Set(filtered.map(row=>row.kind))];
     const items=[...order.filter(kind=>kinds.includes(kind)),...kinds.filter(kind=>!order.includes(kind)).sort()].map(kind=>{
       const visits=filtered.filter(row=>row.kind===kind);
-      const {matched,areaCost,categoryCosts}=operationCosts(selected,visits,direction,true);
-      const ot=[sum(matched.flatMap(entry=>entry.roles??[]),'otCost')];
-      const other=[areaCost,...categoryCosts.map(category=>category.amount)];
+      const {matched,areaCost}=operationCosts(selected,visits,direction,true);
+      const roles=matched.flatMap(entry=>entry.roles??[]);
+      const labour=['dayCost','otCost'].map(key=>roles.reduce((total,role)=>total+(role[key]??0),0));
+      const shifts=visits.map(visit=>splitWorkingMinutes(visit.start,visit.end)).filter(Boolean);
       return {
         kind,
         vehicle:selected?.vehicle,
-        ot,
-        otComplete:matched.length===visits.length&&matched.every(entry=>entry.complete),
-        other,
-        combined:[...ot,...other]
+        labour,
+        hours:[sum(shifts,'day'),sum(shifts,'ot')],
+        labourComplete:matched.length===visits.length&&matched.every(entry=>entry.complete),
+        combined:[...labour,areaCost]
       };
     });
     const label=direction==='L'?'Loading':'Unloading';
-    if(selected)return [renderCostChart(items,label,[...otCostSeries,...otherCostSeries],'combined')];
-    return [renderCostChart(items,label,otCostSeries,'ot'),renderCostChart(items,label,otherCostSeries,'other')];
+    if(selected)return [renderCostChart(items,label,[...labourCostSeries,otherCostSeries[0]],'combined')];
+    return [items.length?renderCostChart(items,label,labourCostSeries,'labour'):'',renderOtherCostChart(label,totals,showsMonthlyCharges(null))];
   });
   const [loading,unloading]=charts;
   const costs=[loading[0],unloading[0],loading[1],unloading[1]].join('');
@@ -2151,9 +2179,9 @@ function fillChargeEditor(entry={}){
   el('chargeUnit').innerHTML=optionList(chargeUnits[selectedCostTab]);
   el('chargeUnit').value=entry.unit??chargeUnits[selectedCostTab][0];
   el('chargeQuantity').value=entry.quantity??1;
-  el('chargeDirection').value=entry.operation==='UL'?'UL':knownAmount(entry.L)&&!knownAmount(entry.U)?'L':'U';
+  el('chargeDirection').value=entry.operation??(knownAmount(entry.L)?(knownAmount(entry.U)?'UL':'L'):knownAmount(entry.U)?'U':'UL');
   el('chargeCurrency').value=entry.currency??'LKR';
-  el('chargeRate').value=entry.originalRate??(entry.operation==='UL'?entry.U+entry.L:entry[el('chargeDirection').value])??'';
+  el('chargeRate').value=entry.originalRate??(el('chargeDirection').value==='UL'?(knownAmount(entry.U)&&knownAmount(entry.L)?entry.U+entry.L:''):entry[el('chargeDirection').value])??'';
   updateChargeVehicles(entry.vehicle);
   if(selectedCostTab==='vas')el('vasDetails').value=entry.notes??'';
   refreshChargePreview();
