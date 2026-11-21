@@ -650,6 +650,7 @@ button,input,select,textarea,::file-selector-button{font-family:inherit}
 .category-cost-row .average-time-track{display:block;height:7px}
 .category-cost-row strong{white-space:nowrap}
 .shift-chart-hours{display:block;font-size:.62rem;line-height:1.2}
+#charts .chart-fill-ready:not(.chart-fill-visible) :is(.average-time-track i,.vehicle-cost-stack,.grouped-cost-bar){transition:none}
 </style>
 <header class="dashboard-header"><div class="job-header-actions"><div class="header-scope"><label><span>Customer</span><select id="customer"></select></label>
 <label><span>Job</span><select id="job"></select></label></div><button id="openCosts" type="button" aria-haspopup="dialog"><svg class="ui-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" aria-hidden="true"><rect x="5" y="3" width="14" height="18" rx="2"/><path d="M8 8h8m-8 4h2m4 0h2m-8 4h2m4 0h2"/></svg>Job Costing</button><p id="payrollSession" role="status"></p><button id="payrollSignIn" type="button">Payroll sign in</button><button id="payrollSignOut" type="button" hidden>Sign out</button></div><div class="dashboard-title"><img class="gtl-header-logo" src="./logo-header.png?v=golden-cost-logo" width="512" height="460" alt="GTL Job Costing"><div><p class="dashboard-brand">GTL · GLOBAL PARK</p><h1>Warehouse Operations &amp; Job Costing</h1><small>Vehicle turnaround, crew hours and job costs</small></div></div>
@@ -968,6 +969,7 @@ el('reset').addEventListener('click',()=>{
   const period=monthBounds(el('monthFilter').value);
   from=period.date;to=period.periodEnd;
   render();
+  observeChartFills();
 });
 let month,draftFrom,draftTo;
 function paintCalendar(){
@@ -1153,17 +1155,22 @@ let chartFillObserver;
 function observeChartFills(){
   chartFillObserver?.disconnect();
   if(!window.IntersectionObserver||matchMedia('(prefers-reduced-motion: reduce)').matches)return;
+  const charts=el('charts');
+  const panels=charts.querySelectorAll('article.panel');
+  for(const panel of panels){
+    panel.classList.add('chart-fill-ready');
+    panel.classList.remove('chart-fill-visible');
+  }
+  // Commit the reset before observing cards that are already on screen.
+  void charts.offsetWidth;
+  const threshold=.15;
   chartFillObserver=new IntersectionObserver(entries=>{
     for(const entry of entries){
-      if(!entry.isIntersecting)continue;
-      entry.target.classList.add('chart-fill-visible');
-      chartFillObserver.unobserve(entry.target);
+      if(!entry.isIntersecting)entry.target.classList.remove('chart-fill-visible');
+      else if(entry.intersectionRatio>=threshold)entry.target.classList.add('chart-fill-visible');
     }
-  },{threshold:.15});
-  for(const chart of el('charts').querySelectorAll('article.panel')){
-    chart.classList.add('chart-fill-ready');
-    chartFillObserver.observe(chart);
-  }
+  },{threshold:[0,threshold]});
+  for(const panel of panels)chartFillObserver.observe(panel);
 }
 const labourCostSeries=[
   {label:'Day labour',color:'#238168',chip:'#daf0e9'},
