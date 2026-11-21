@@ -838,7 +838,7 @@ const defaultDashboardMonth='2026-10';
 el('monthFilter').value=defaultDashboardMonth;
 const initialPeriod=monthBounds(el('monthFilter').value);
 let from=initialPeriod.date,to=initialPeriod.periodEnd;
-function render() {
+function render(animate=true) {
   el('rangeText').textContent=from&&to?`${from} – ${to}`:'All dates';
   const direction=el('direction').value;
   const invalid=from && to && from>to;
@@ -892,7 +892,7 @@ function render() {
   }).join('')||'<p class="muted">No operations or charges for the selected period.</p>';
   for(const d of directions)renderVisitCost(selected,rows.filter(o=>o.direction===d),d);
   fitKpiValues();
-  animateCostCards();
+  if(animate)animateCostCards(JSON.stringify([el('customer').value,el('job').value,from,to,direction,kind,selected?.id]));
   renderVehicleCostCharts(rows,selected);
 }
 function showDetails(reg) {
@@ -1081,7 +1081,7 @@ function operationCosts(visit,rows,direction,vehicleOnly=false){
   const complete=rows.length>0&&matched.length===rows.length&&matched.every(entry=>entry.complete)&&knownAmount(rate);
   return {matched,shared,labour,rate,areaCost,dated,categoryCosts,operatingCost,complete};
 }
-function renderAverageTimeCharts(rows){
+function renderAverageTimeCharts(rows,selected){
   const groups=['L','U'].map(direction=>{
     const timed=rows.filter(row=>row.direction===direction&&Number.isFinite(row.minutes)&&row.minutes>=0);
     return [...new Set(timed.map(row=>row.kind))].sort().map(kind=>{
@@ -1090,7 +1090,7 @@ function renderAverageTimeCharts(rows){
     });
   });
   const scale=Math.max(1,...groups.flat().map(group=>group.minutes));
-  const widthClass=groups.every(items=>items.length)?'':' chart-full-width';
+  const widthClass=selected||groups.every(items=>items.length)?'':' chart-full-width';
   return groups.map((items,index)=>{
     if(!items.length)return '';
     const direction=index?'Unloading':'Loading';
@@ -1102,7 +1102,7 @@ function renderAverageTimeCharts(rows){
       </div>`;
     }).join('');
     return `<article class="panel average-time-chart ${index?'unloading':'loading'}${widthClass}">
-      <h2>Average ${direction} Time by Vehicle Type</h2>
+      <h2>${selected?direction+' Timeline · '+esc(selected.vehicle):'Average '+direction+' Time by Vehicle Type'}</h2>
       ${bars}
     </article>`;
   }).join('');
@@ -1148,16 +1148,17 @@ function renderCostChart(items,direction,series,field){
         aria-label="${esc(item.kind)} · ${description}"><span class="segment-tooltip">${description}</span></span>`;
     }).join('');
     return `<div class="vehicle-cost-column"><div class="vehicle-cost-track grouped-cost-track">
-      ${segments||'<span class="muted">—</span>'}</div><b>${esc(item.kind)}</b>${field==='ot'&&!item.otComplete?' <small>*</small>':''}</div>`;
+      ${segments||'<span class="muted">—</span>'}</div><b>${esc(item.kind)}</b>${field!=='other'&&!item.otComplete?' <small>*</small>':''}</div>`;
   }).join('');
   const other=field==='other';
   return `<article class="panel vehicle-cost-chart${other?' other-cost-chart':''}">
-    <h2>${direction} ${other?'Other Costs':'OT Cost'} by Vehicle Type</h2>
+    <h2>${direction} ${field==='combined'?'Costs':other?'Other Costs':'OT Cost'}${field==='combined'?' · '+esc(items[0].vehicle):' by Vehicle Type'}</h2>
     <div class="vehicle-cost-legend"><b>LKR</b>${legend}</div>
     <div class="vehicle-cost-plot"><div class="vehicle-cost-axis">${axis}</div><div class="vehicle-cost-bars">${bars}</div></div>
-    <p class="muted">${other?'Vehicle costs only. Excludes job-wide dated charges.':'* Known OT costs only.'}</p>
+    <p class="muted">${other?'Vehicle costs only. Excludes job-wide dated charges.':'* Known costs only.'}</p>
   </article>`;
 }
+let previousChartMarkup;
 function renderVehicleCostCharts(rows,selected){
   const charts=['L','U'].map(direction=>{
     const filtered=rows.filter(row=>row.direction===direction);
@@ -1167,33 +1168,40 @@ function renderVehicleCostCharts(rows,selected){
     const items=[...order.filter(kind=>kinds.includes(kind)),...kinds.filter(kind=>!order.includes(kind)).sort()].map(kind=>{
       const visits=filtered.filter(row=>row.kind===kind);
       const {matched,areaCost,categoryCosts}=operationCosts(selected,visits,direction,true);
+      const ot=[sum(matched.flatMap(entry=>entry.roles??[]),'otCost')];
+      const other=[areaCost,...categoryCosts.map(category=>category.amount)];
       return {
         kind,
-        ot:[sum(matched.flatMap(entry=>entry.roles??[]),'otCost')],
+        vehicle:selected?.vehicle,
+        ot,
         otComplete:matched.length===visits.length&&matched.every(entry=>entry.complete),
-        other:[areaCost,...categoryCosts.map(category=>category.amount)]
+        other,
+        combined:[...ot,...other]
       };
     });
     const label=direction==='L'?'Loading':'Unloading';
+    if(selected)return renderCostChart(items,label,[...otCostSeries,...otherCostSeries],'combined');
     return renderCostChart(items,label,otCostSeries,'ot')+renderCostChart(items,label,otherCostSeries,'other');
   }).join('');
-  el('charts').innerHTML=renderAverageTimeCharts(rows)+charts;
+  const markup=renderAverageTimeCharts(rows,selected)+charts;
+  if(markup===previousChartMarkup)return;
+  previousChartMarkup=markup;
+  el('charts').innerHTML=markup;
   observeChartFills();
 }
-function renderVisitCost(visit,rows,direction){
+function renderVisitCost(visit,rows,direction,updateSummary=true){
   const panel=el('visitCost');
   const summary=el('cost-'+direction);
-  summary.innerHTML='';
   if(!visit&&!direction)return;
   const {matched,shared,labour,rate,areaCost,dated,categoryCosts,operatingCost,complete}=operationCosts(visit,rows,direction);
   const operation=operationName(visit?.direction||direction);
   const tile=(label,value,note='')=>`<article${label==='Total Cost'?' class="total-cost-card"':''}><span>${label}</span><strong data-cost-amount="${value}">${money(value)}</strong><small>${note}</small></article>`;
-  summary.innerHTML=(areaCost>0?tile(operation+' Area Cost',areaCost,money(rate)+' / ft²'):'')+
+  if(updateSummary)summary.innerHTML=(areaCost>0?tile(operation+' Area Cost',areaCost,money(rate)+' / ft²'):'')+
     (shared||labour>0?tile(visit?'Vehicle Labour Cost':'Labour Cost',labour,shared?
       (matched.length===rows.length&&matched.every(entry=>entry.complete)?'Published crew cost':'Published crew cost · partial coverage'):'Estimated crew cost'):'')+
     categoryCosts.filter(category=>category.amount>0).map(category=>tile(category.label,category.amount)).join('')+
     (labour+areaCost+operatingCost>0?tile('Total Cost',labour+areaCost+operatingCost,complete&&(!shared||matched.length===rows.length&&matched.every(entry=>entry.complete))?'Estimated total':'Known costs only'):'');
-  if(!visit&&dated.length){
+  if(updateSummary&&!visit&&dated.length){
     summary.innerHTML+=`<details class="dated-breakdown"><summary>Dated charge breakdown</summary>${dated.map(({label,entry,total})=>
       `<p>${esc(entry.month||entry.date)} · ${esc(label)} · ${esc(entry.item)} · ${fmt(entry.quantity,3)} ${esc(entry.unit)} · <strong>${money(total)}</strong></p>`).join('')}</details>`;
   }
@@ -1404,11 +1412,11 @@ function requestMovementCrew(month){
     if(payrollUser?.id!==userId||movementCrewByMonth.get(month)!==request)return;
     request.records=new Map(rows.map(row=>[row.id,row]));
     request.status='ready';
-    render();
+    render(false);
   }).catch(()=>{
     if(payrollUser?.id!==userId||movementCrewByMonth.get(month)!==request)return;
     request.status='unavailable';
-    render();
+    render(false);
   });
 }
 function requestDiagnosticPayroll(month){
@@ -1420,11 +1428,11 @@ function requestDiagnosticPayroll(month){
     request.status='ready';
     request.records=new Map(result.records);
     request.hours=result.hours;
-    render();
+    render(false);
   }).catch(()=>{
     if(diagnosticPayrollByMonth.get(month)!==request)return;
     request.status='unavailable';
-    render();
+    render(false);
   });
 }
 const publicVehicleCrew=new Map();
@@ -1437,12 +1445,15 @@ function requestPublicVehicleCrew(visit){
     if(publicVehicleCrew.get(visit.id)!==request)return;
     request.status=data?'ready':'unavailable';
     request.crew=data;
-    if(el('vehicle').value===visit.id)render();
+    refreshSelectedCrew(visit);
   }).catch(()=>{
     if(publicVehicleCrew.get(visit.id)!==request)return;
     request.status='unavailable';
-    if(el('vehicle').value===visit.id)render();
+    refreshSelectedCrew(visit);
   });
+}
+function refreshSelectedCrew(visit){
+  if(el('vehicle').value===visit.id&&el('visitCost'))renderVisitCost(visit,[visit],visit.direction,false);
 }
 function visibleVehicleCrew(visit){
   if(!payrollUser)return null;
@@ -1474,7 +1485,7 @@ function setPayrollSession(user){
     email?'Signed in as '+email+' · View only. Sign in as the payroll administrator to upload.':
     'Sign in from the dashboard to upload or view shared payroll.';
   el('payrollSession').textContent='';
-  render();
+  render(false);
   if(el('costSettings').open)renderPayrollRows();
   if(user)void refreshSharedPayroll();
 }
@@ -1499,14 +1510,14 @@ const publishedJobCosts=new Map();
 const jobCostKey=(customer,job)=>JSON.stringify([customer,job]);
 const dashboardJobCosts=()=>publishedJobCosts.get(jobCostKey(el('customer').value,el('job').value))??costSettings;
 let jobCostPublishQueue=Promise.resolve();
-async function refreshPublishedJobCosts(){
+async function refreshPublishedJobCosts(renderAfter=true){
   if(!publishedCostsClient)return;
   const {data,error}=await publishedCostsClient.rpc('gtl_public_job_costs');
   if(error)return;
   publishedJobCosts.clear();
   for(const item of data??[])publishedJobCosts.set(jobCostKey(item.customer,item.job),item.costs);
   refreshCostWeeks(true);
-  render();
+  if(renderAfter)render();
 }
 function publishJobCosts(){
   if(payrollUser?.email?.trim().toLowerCase()!==payrollAdminEmail)return;
@@ -1530,7 +1541,7 @@ function publishJobCosts(){
 el('publishJobCosts').addEventListener('click',()=>{
   if(window.confirm('Publish this job’s saved area rates and charge amounts on the public dashboard?'))publishJobCosts();
 });
-async function refreshPublishedLabour(){
+async function refreshPublishedLabour(renderAfter=true){
   if(!publishedCostsClient)return;
   const {data,error}=await publishedCostsClient.rpc('gtl_public_monthly_labour');
   if(error){console.warn('Monthly labour totals unavailable:',error.message);return;}
@@ -1538,7 +1549,7 @@ async function refreshPublishedLabour(){
   for(const {month,totals} of data??[]){
     for(const item of totals)publishedLabour.set(JSON.stringify([month,item.customer,item.job]),new Map(item.operationCosts.map(entry=>[entry.id,entry])));
   }
-  render();
+  if(renderAfter)render();
 }
 function publishedRoleTable(visits,showVehicleCrew=false){
   if(!visits.length)return '';
@@ -1789,7 +1800,7 @@ function parseMovementRows(rows){
   if(!groups.size)throw new Error('No vehicle operations found.');
   return [...groups.values()].map(({metadata,cargo})=>({...metadata,cargo,cbm:cargo.reduce((sum,line)=>sum+line.cbm,0)}));
 }
-async function refreshMovementOperations(){
+async function refreshMovementOperations(renderAfter=true){
   if(!publishedCostsClient){el('movementLastUpload').textContent='Unavailable';return;}
   const {data,error}=await publishedCostsClient.rpc('gtl_public_movement_operations');
   if(error){
@@ -1818,7 +1829,7 @@ async function refreshMovementOperations(){
   updateJobs();
   if([...el('job').options].some(option=>option.value===currentJob))el('job').value=currentJob;
   refreshCostWeeks(true);
-  render();
+  if(renderAfter)render();
 }
 el('movementUpload').addEventListener('change',async ()=>{
   const input=el('movementUpload'),status=el('movementStatus'),file=input.files[0];
@@ -1919,7 +1930,7 @@ async function refreshSharedPayroll(){
     el('payrollLastUpload').textContent=result.last_upload?
       new Intl.DateTimeFormat('en-LK',{timeZone:'Asia/Colombo',dateStyle:'medium',timeStyle:'short'}).format(new Date(result.last_upload)):
       result.revision?'Upload time not recorded':'No upload yet';
-    render();
+    render(false);
     const box=el('costForm').querySelector('[data-rate="hours"]');
     const input=box.querySelector('input');
     input.value=result.hours??costSettings.hours;
@@ -2255,12 +2266,15 @@ function fitCrewTables(){
     setSize(low);
   }
 }
-function animateCostCards(){
+let animatedCostView;
+function animateCostCards(view){
+  if(view===animatedCostView)return;
   if(matchMedia('(prefers-reduced-motion: reduce)').matches)return;
   const metrics=[...el('cards').querySelectorAll('.timeline-costs > article > [data-cost-amount]')]
     .map(node=>({node,value:Number(node.dataset.costAmount),final:node.textContent}))
     .filter(metric=>Number.isFinite(metric.value));
   if(!metrics.length)return;
+  animatedCostView=view;
   for(const {node} of metrics)node.textContent=money(0);
   let start;
   function frame(now){
@@ -2302,16 +2316,21 @@ new ResizeObserver(([entry])=>{
   fitKpiValues();
 }).observe(el('cards'));
 refreshCostWeeks(false);
-render();
 if(payrollClient){
-  void refreshPublishedLabour();
-  void refreshPublishedJobCosts();
-  void refreshMovementOperations();
+  render(false);
+  void Promise.allSettled([
+    refreshPublishedLabour(false),
+    refreshPublishedJobCosts(false),
+    refreshMovementOperations(false)
+  ]).then(()=>render());
   payrollClient.auth.onAuthStateChange((event,session)=>{
     if(['INITIAL_SESSION','SIGNED_IN','SIGNED_OUT'].includes(event))
       setTimeout(()=>setPayrollSession(session?.user??null),0);
   });
-}else el('payrollSession').textContent='Payroll sign-in could not load.';
+}else{
+  render();
+  el('payrollSession').textContent='Payroll sign-in could not load.';
+}
 </script>
 
 
