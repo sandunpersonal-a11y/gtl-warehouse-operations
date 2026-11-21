@@ -554,6 +554,8 @@ html{font-size:clamp(15px,calc(11px + .36vw),20px)}
 #movementLastUpload{margin-left:.35em}
 #movementStatus:empty{display:none}
 .crew-epf-inline{display:inline;color:inherit;font-size:.8em;font-weight:500;white-space:nowrap;margin-inline-start:.35em}
+#charts:empty{display:none}
+#charts .chart-full-width{grid-column:1/-1}
 #charts .vehicle-cost-chart{min-width:0;padding:9px 12px}
 .vehicle-cost-chart h2{font-size:.9rem;margin:0}
 .vehicle-cost-legend{display:flex;gap:6px;font-size:.66rem;margin:4px 0 8px}
@@ -1082,7 +1084,9 @@ function renderAverageTimeCharts(rows){
     });
   });
   const scale=Math.max(1,...groups.flat().map(group=>group.minutes));
+  const widthClass=groups.every(items=>items.length)?'':' chart-full-width';
   return groups.map((items,index)=>{
+    if(!items.length)return '';
     const direction=index?'Unloading':'Loading';
     const bars=items.map(item=>{
       const label=esc(item.kind+' · '+duration(item.minutes)+' · '+item.count+(item.count===1?' operation':' operations'));
@@ -1091,9 +1095,9 @@ function renderAverageTimeCharts(rows){
         <strong>${duration(item.minutes)}</strong><small>${item.count} ops</small>
       </div>`;
     }).join('');
-    return `<article class="panel average-time-chart ${index?'unloading':'loading'}">
+    return `<article class="panel average-time-chart ${index?'unloading':'loading'}${widthClass}">
       <h2>Average ${direction} Time by Vehicle Type</h2>
-      ${bars||'<p class="muted">No matching operations with both times recorded.</p>'}
+      ${bars}
     </article>`;
   }).join('');
 }
@@ -1129,7 +1133,9 @@ function renderVehicleCostCharts(rows,selected){
         cost:dayCost+otCost+otherCost,complete:costs.complete};
     });
   });
+  const widthClass=groups.every(items=>items.length)?'':' chart-full-width';
   el('charts').innerHTML=renderAverageTimeCharts(rows)+groups.map((items,index)=>{
+    if(!items.length)return '';
     const direction=index?'Unloading':'Loading';
     const peak=Math.max(1,...items.flatMap(item=>[item.dayCost,item.otCost,item.otherCost]));
     const unit=10**Math.floor(Math.log10(peak/4));
@@ -1149,10 +1155,10 @@ function renderVehicleCostCharts(rows,selected){
         ${item.cost>0?'':'<span class="muted">—</span>'}
         </div><b>${esc(type)}</b>${item.complete?'':' <small>*</small>'}</div>`;
     }).join('');
-    return `<article class="panel vehicle-cost-chart"><h2>${direction} Cost by Vehicle Type</h2>
-      ${bars?`<div class="vehicle-cost-legend"><b>LKR</b><span class="day-chip">Day cost</span><span class="ot-chip">OT cost</span><span class="other-cost-chip">Other costs</span></div>
+    return `<article class="panel vehicle-cost-chart${widthClass}"><h2>${direction} Cost by Vehicle Type</h2>
+      <div class="vehicle-cost-legend"><b>LKR</b><span class="day-chip">Day cost</span><span class="ot-chip">OT cost</span><span class="other-cost-chip">Other costs</span></div>
         <div class="vehicle-cost-plot"><div class="vehicle-cost-axis">${axis}</div><div class="vehicle-cost-bars">${bars}</div></div>
-        <p class="muted">Small amounts use a minimum marker. * Known costs only. Excludes job-wide dated charges.</p>`:'<p class="muted">No matching operations.</p>'}</article>`;
+        <p class="muted">Small amounts use a minimum marker. * Known costs only. Excludes job-wide dated charges.</p></article>`;
   }).join('');
   observeChartFills();
 }
