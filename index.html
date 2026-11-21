@@ -554,7 +554,7 @@ html{font-size:clamp(15px,calc(11px + .36vw),20px)}
 .movement-upload-row>span{margin-left:auto;text-align:right;font-size:.8rem}
 #movementLastUpload{margin-left:.35em}
 #movementStatus:empty{display:none}
-.crew-epf-inline{display:inline;color:inherit;font-size:.8em;font-weight:500;white-space:nowrap;margin-inline-start:.35em}
+.crew-epf-inline{display:inline;color:inherit;font-size:.8em;font-weight:700;white-space:nowrap;margin-inline-start:.35em}
 #charts:empty{display:none}
 #charts .chart-full-width{grid-column:1/-1}
 #charts .vehicle-cost-chart{min-width:0;padding:9px 12px}
@@ -789,15 +789,22 @@ const optionList=values=>values.map(value=>`<option value="${esc(value)}">${esc(
 let operations=initialOperations;
 let movementLoadState='loading';
 const publicDashboardCache='gtl-public-dashboard-v1:';
+const publicDashboardSnapshots=new Map();
 function readPublicDashboardData(key){
   try{
-    const rows=JSON.parse(localStorage.getItem(publicDashboardCache+key));
+    const snapshot=localStorage.getItem(publicDashboardCache+key);
+    const rows=JSON.parse(snapshot);
+    if(Array.isArray(rows))publicDashboardSnapshots.set(key,snapshot);
     return Array.isArray(rows)?rows:null;
   }catch{return null;}
 }
 function cachePublicDashboardData(key,rows){
-  try{localStorage.setItem(publicDashboardCache+key,JSON.stringify(rows));}
+  const snapshot=JSON.stringify(rows);
+  if(publicDashboardSnapshots.get(key)===snapshot)return false;
+  publicDashboardSnapshots.set(key,snapshot);
+  try{localStorage.setItem(publicDashboardCache+key,snapshot);}
   catch{/* The dashboard also works when browser storage is unavailable. */}
+  return true;
 }
 const operationKey=item=>JSON.stringify([item.customer,item.job,String(item.reg)]);
 const customers=[...new Set(operations.map(o=>o.customer))].sort();
@@ -873,6 +880,8 @@ const defaultDashboardMonth='2026-10';
 el('monthFilter').value=defaultDashboardMonth;
 const initialPeriod=monthBounds(el('monthFilter').value);
 let from=initialPeriod.date,to=initialPeriod.periodEnd;
+let previousCardsMarkup;
+let renderedVisit;
 function render(animate=true) {
   el('rangeText').textContent=from&&to?`${from} – ${to}`:'All dates';
   const direction=el('direction').value;
@@ -901,7 +910,7 @@ function render(animate=true) {
   const directions=(selected?[selected.direction]:direction?[direction]:['U','L']).filter(d=>rows.some(o=>o.direction===d)||operationCosts(selected,[],d).operatingCost>0);
   el('range').textContent=invalid?'From date must be on or before To date.':'';
   el('range').hidden=!invalid;
-  el('cards').innerHTML=directions.map(d=>{
+  const cardsMarkup=directions.map(d=>{
     const items=rows.filter(o=>o.direction===d);
     const label=operationName(d);
     const cbm=sum(items,'cbm');
@@ -927,6 +936,11 @@ function render(animate=true) {
   }).join('')||(movementLoadState==='loading'?'<p class="muted" role="status">Loading vehicle operations…</p>':
     movementLoadState==='error'?'<p class="muted" role="status">Vehicle operations could not load. Refresh to try again.</p>':
     '<p class="muted">No operations or charges for the selected period.</p>');
+  if(!selected||cardsMarkup!==previousCardsMarkup){
+    el('cards').innerHTML=cardsMarkup;
+    renderedVisit=null;
+  }
+  previousCardsMarkup=cardsMarkup;
   for(const d of directions)renderVisitCost(selected,rows.filter(o=>o.direction===d),d);
   fitKpiValues();
   if(animate)animateCostCards(JSON.stringify([el('customer').value,el('job').value,from,to,direction,kind,selected?.id]));
@@ -1263,32 +1277,38 @@ function renderVehicleCostCharts(rows,selected){
   el('charts').innerHTML=markup;
   observeChartFills();
 }
-function renderVisitCost(visit,rows,direction,updateSummary=true){
+function renderVisitCost(visit,rows,direction){
   const panel=el('visitCost');
   const summary=el('cost-'+direction);
   if(!visit&&!direction)return;
   const {matched,shared,labour,rate,areaCost,dated,categoryCosts,operatingCost,complete}=operationCosts(visit,rows,direction);
   const operation=operationName(visit?.direction||direction);
   const tile=(label,value,note='')=>`<article${label==='Total Cost'?' class="total-cost-card"':''}><span>${label}</span><strong data-cost-amount="${value}">${money(value)}</strong><small>${note}</small></article>`;
-  if(updateSummary)summary.innerHTML=(areaCost>0?tile(operation+' Area Cost',areaCost,money(rate)+' / ft²'):'')+
+  summary.innerHTML=(areaCost>0?tile(operation+' Area Cost',areaCost,money(rate)+' / ft²'):'')+
     (shared||labour>0?tile(visit?'Vehicle Labour Cost':'Labour Cost',labour,shared?
       (matched.length===rows.length&&matched.every(entry=>entry.complete)?'Published crew cost':'Published crew cost · partial coverage'):'Estimated crew cost'):'')+
     categoryCosts.filter(category=>category.amount>0).map(category=>tile(category.label,category.amount)).join('')+
     (labour+areaCost+operatingCost>0?tile('Total Cost',labour+areaCost+operatingCost,complete&&(!shared||matched.length===rows.length&&matched.every(entry=>entry.complete))?'Estimated total':'Known costs only'):'');
-  if(updateSummary&&!visit&&dated.length){
+  if(!visit&&dated.length){
     summary.innerHTML+=`<details class="dated-breakdown"><summary>Dated charge breakdown</summary>${dated.map(({label,entry,total})=>
       `<p>${esc(entry.month||entry.date)} · ${esc(label)} · ${esc(entry.item)} · ${fmt(entry.quantity,3)} ${esc(entry.unit)} · <strong>${money(total)}</strong></p>`).join('')}</details>`;
   }
   if(!visit)return;
+  if(renderedVisit===visit){
+    refreshSelectedCrew(visit);
+    return;
+  }
+  renderedVisit=visit;
   const publicRoleRows=publishedRoleTable([visit],true);
   const roles=crewRoles.map(([role,field])=>[role,visit[field]]);
   const assigned=new Set(roles.flatMap(([,list])=>list.map(payrollEpf)));
   panel.innerHTML=`<div class="visit-time-heading"><span>${esc(visit.vehicle)} · Head Count ${esc(visit.heads)}</span> <button type="button" class="oplink" data-reg="${esc(visit.id)}">Cargo details</button></div>
     <div class="crew-counts time-chip"><span>${operationName(visit.direction)} Time <b>${duration(visit.minutes)}</b></span></div>
     ${timelineCard([visit],visit)}
-    ${publicRoleRows}
+    <div id="selectedCrewDetails">${publicRoleRows}</div>
     <div class="crew-counts">${roles.map(([role,list])=>`<span>${role} <b>${new Set(list).size}</b></span>`).join('')}<span>Total Crew <b>${assigned.size}</b></span></div>
     `;
+  el('selectedCrewDetails').dataset.renderedMarkup=publicRoleRows;
 }
 function addPayrollRow(person={},editing=false){
   const readonly=editing?'':' readonly disabled';
@@ -1482,11 +1502,15 @@ function requestMovementCrew(month){
     if(payrollUser?.id!==userId||movementCrewByMonth.get(month)!==request)return;
     request.records=new Map(rows.map(row=>[row.id,row]));
     request.status='ready';
-    render(false);
+    if(renderedVisit){
+      if(renderedVisit.start.slice(0,7)===month)refreshSelectedCrew(renderedVisit);
+    }else render(false);
   }).catch(()=>{
     if(payrollUser?.id!==userId||movementCrewByMonth.get(month)!==request)return;
     request.status='unavailable';
-    render(false);
+    if(renderedVisit){
+      if(renderedVisit.start.slice(0,7)===month)refreshSelectedCrew(renderedVisit);
+    }else render(false);
   });
 }
 function requestDiagnosticPayroll(month){
@@ -1498,11 +1522,15 @@ function requestDiagnosticPayroll(month){
     request.status='ready';
     request.records=new Map(result.records);
     request.hours=result.hours;
-    render(false);
+    if(renderedVisit){
+      if(renderedVisit.start.slice(0,7)===month)refreshSelectedCrew(renderedVisit);
+    }else render(false);
   }).catch(()=>{
     if(diagnosticPayrollByMonth.get(month)!==request)return;
     request.status='unavailable';
-    render(false);
+    if(renderedVisit){
+      if(renderedVisit.start.slice(0,7)===month)refreshSelectedCrew(renderedVisit);
+    }else render(false);
   });
 }
 const publicVehicleCrew=new Map();
@@ -1523,7 +1551,13 @@ function requestPublicVehicleCrew(visit){
   });
 }
 function refreshSelectedCrew(visit){
-  if(el('vehicle').value===visit.id&&el('visitCost'))renderVisitCost(visit,[visit],visit.direction,false);
+  const crew=el('selectedCrewDetails');
+  if(!crew||renderedVisit!==visit||el('vehicle').value!==visit.id)return;
+  const markup=publishedRoleTable([visit],true);
+  if(crew.dataset.renderedMarkup===markup)return;
+  crew.innerHTML=markup;
+  crew.dataset.renderedMarkup=markup;
+  fitCrewTables();
 }
 function visibleVehicleCrew(visit){
   if(!payrollUser)return null;
@@ -1532,7 +1566,8 @@ function visibleVehicleCrew(visit){
   return movementCrewByMonth.get(visit.start.slice(0,7))?.records.get(visit.id)??null;
 }
 function setPayrollSession(user){
-  if(payrollUser?.id!==user?.id){
+  const sessionChanged=payrollUser?.id!==user?.id;
+  if(sessionChanged){
     movementCrewByMonth.clear();
     diagnosticPayrollByMonth.clear();
     payrollMaster.clear();loadedPayrollMonth='';payrollReadVersion++;
@@ -1555,9 +1590,9 @@ function setPayrollSession(user){
     email?'Signed in as '+email+' · View only. Sign in as the payroll administrator to upload.':
     'Sign in from the dashboard to upload or view shared payroll.';
   el('payrollSession').textContent='';
-  render(false);
+  if(sessionChanged)render(false);
   if(el('costSettings').open)renderPayrollRows();
-  if(user)void refreshSharedPayroll();
+  if(user&&sessionChanged)void refreshSharedPayroll();
 }
 const publishedLabour=new Map();
 const canManagePayroll=()=>payrollUser?.email?.trim().toLowerCase()===payrollAdminEmail;
@@ -1584,9 +1619,9 @@ async function refreshPublishedJobCosts(renderAfter=true){
   if(!publishedCostsClient)return;
   const {data,error}=await publishedCostsClient.rpc('gtl_public_job_costs');
   if(error)return;
+  if(!cachePublicDashboardData('job-costs',data??[]))return;
   applyPublishedJobCosts(data??[]);
   if(renderAfter)render();
-  cachePublicDashboardData('job-costs',data??[]);
 }
 function applyPublishedJobCosts(data){
   publishedJobCosts.clear();
@@ -1619,9 +1654,9 @@ async function refreshPublishedLabour(renderAfter=true){
   if(!publishedCostsClient)return;
   const {data,error}=await publishedCostsClient.rpc('gtl_public_monthly_labour');
   if(error){console.warn('Monthly labour totals unavailable:',error.message);return;}
+  if(!cachePublicDashboardData('labour',data??[]))return;
   applyPublishedLabour(data??[]);
   if(renderAfter)render();
-  cachePublicDashboardData('labour',data??[]);
 }
 function applyPublishedLabour(data){
   publishedLabour.clear();
@@ -1882,9 +1917,9 @@ async function refreshMovementOperations(renderAfter=true){
   try{
     const {data,error}=await publishedCostsClient.rpc('gtl_public_movement_operations');
     if(error)throw error;
+    if(!cachePublicDashboardData('movements',data??[])){el('movementStatus').textContent='';return;}
     applyMovementOperations(data??[]);
     if(renderAfter)render();
-    cachePublicDashboardData('movements',data??[]);
   }catch(error){
     if(movementLoadState==='loading'){
       movementLoadState='error';
@@ -2419,7 +2454,8 @@ if(payrollClient){
   if(cachedMovements)applyMovementOperations(cachedMovements);
   render(false);
   void refreshMovementOperations();
-  void Promise.allSettled([refreshPublishedLabour(false),refreshPublishedJobCosts(false)]).then(()=>render());
+  void refreshPublishedLabour();
+  void refreshPublishedJobCosts();
   payrollClient.auth.onAuthStateChange((event,session)=>{
     if(['INITIAL_SESSION','SIGNED_IN','SIGNED_OUT'].includes(event))
       setTimeout(()=>setPayrollSession(session?.user??null),0);
