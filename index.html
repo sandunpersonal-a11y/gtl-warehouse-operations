@@ -666,20 +666,17 @@ button,input,select,textarea,::file-selector-button{font-family:inherit}
 .monthly-cost-heading span,.monthly-cost-heading small{color:#52647b;font-size:.78rem}
 .monthly-cost-grid{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:10px;align-items:start}
 .monthly-cost-card{border:1px solid #152b451a;border-radius:8px;padding:5px 8px 3px;color:#142844;min-width:0}
-.monthly-cost-labour{background:#e7f1ff}.monthly-cost-area{background:#e4f5f0}.monthly-cost-other{background:#fff2d8}
+.monthly-cost-card{background:#e7f1ff}
 .monthly-cost-total{background:#142844;color:#fff}
 .monthly-cost-card h3{font-size:.75rem;line-height:1rem;margin:0 0 2px}
 .monthly-cost-card strong{display:block;font-size:clamp(.88rem,1.25vw,1.2rem);line-height:1.15;font-variant-numeric:tabular-nums;overflow-wrap:anywhere}
-.monthly-cost-card details{border-top:1px solid #14284433;margin-top:4px;padding-top:0}
-.monthly-cost-total details{border-color:#ffffff45}
-.monthly-cost-card summary{cursor:pointer;font-size:.7rem;min-height:21px;line-height:21px}
-.monthly-cost-card dl{margin:2px 0 0;font-size:.76rem}
-.monthly-cost-card dl div{display:flex;flex-wrap:wrap;justify-content:space-between;gap:2px 8px;margin-top:4px}
+.monthly-cost-card dl{margin:4px 0 0;padding-top:3px;border-top:1px solid #14284433;font-size:.72rem}
+.monthly-cost-total dl{border-color:#ffffff45}
+.monthly-cost-card dl div{display:flex;flex-wrap:wrap;justify-content:space-between;gap:1px 8px;margin-top:2px}
 .monthly-cost-card dd{margin:0;font-weight:700}
 @media(max-width:680px){
   .monthly-cost-grid{grid-template-columns:repeat(2,minmax(0,1fr));gap:8px}
   .monthly-cost-card strong{font-size:clamp(.84rem,3.8vw,1.12rem)}
-  .monthly-cost-card summary{min-height:26px;line-height:26px}
 }
 </style>
 <header class="dashboard-header"><div class="job-header-actions"><div class="header-scope"><label><span>Customer</span><select id="customer"></select></label>
@@ -1174,7 +1171,6 @@ function operationCosts(visit,rows,direction,vehicleOnly=false,allVehicleTypes=f
   return {matched,shared,labour,rate,areaCost,dated,categoryCosts,operatingCost,complete};
 }
 let monthlyCostKey;
-let monthlyCostScope;
 function renderMonthlyCosts(visit){
   const section=el('monthlyCosts');
   if(el('direction').value||!showsMonthlyCharges(visit)){
@@ -1194,26 +1190,17 @@ function renderMonthlyCosts(visit){
     ['total','Total Monthly Cost',total(loading),total(unloading)]
   ];
   const scope=JSON.stringify([el('customer').value,el('job').value,month]);
-  const partial=['L','U'].some((direction,index)=>
-    rows.some(row=>row.direction===direction)&&![loading,unloading][index].complete);
-  const key=JSON.stringify([scope,figures,partial]);
+  const key=JSON.stringify([scope,figures]);
   section.hidden=false;
   if(key===monthlyCostKey)return;
-  const expanded=new Set(scope===monthlyCostScope
-    ?[...section.querySelectorAll('details[open]')].map(detail=>detail.dataset.costKind):[]);
   monthlyCostKey=key;
-  monthlyCostScope=scope;
   const period=new Intl.DateTimeFormat('en-LK',{month:'long',year:'numeric',timeZone:'UTC'}).format(new Date(month+'-01T00:00:00Z'));
-  section.innerHTML=`<div class="monthly-cost-heading"><h2 id="monthlyCostsHeading">Monthly Cost Summary</h2>
-    <span>${period}</span>${partial?'<small>Known costs only · some labour or area costs are incomplete</small>':''}</div>
+  section.innerHTML=`<div class="monthly-cost-heading"><h2 id="monthlyCostsHeading">Monthly Cost Summary · ${period}</h2></div>
     <div class="monthly-cost-grid">${figures.map(([kind,label,l,u])=>`
       <article class="monthly-cost-card monthly-cost-${kind}">
         <h3>${label}</h3><strong data-monthly-amount="${l+u}">${money(l+u)}</strong>
-        <details data-cost-kind="${kind}"${expanded.has(kind)?' open':''}>
-          <summary>Breakdown</summary>
-          <dl><div><dt>Loading</dt><dd>${money(l)}</dd></div>
-              <div><dt>Unloading</dt><dd>${money(u)}</dd></div></dl>
-        </details>
+        <dl><div><dt>Loading</dt><dd>${money(l)}</dd></div>
+            <div><dt>Unloading</dt><dd>${money(u)}</dd></div></dl>
       </article>`).join('')}</div>`;
   if(matchMedia('(prefers-reduced-motion: reduce)').matches)return;
   const amounts=[...section.querySelectorAll('[data-monthly-amount]')];
