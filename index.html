@@ -701,7 +701,7 @@ button,input,select,textarea,::file-selector-button{font-family:inherit}
 .saved-charge dl{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:6px;margin:0;font-size:.8rem}
 .saved-charge dd{margin:0;font-weight:700}
 .saved-charge-actions{display:flex;flex-wrap:wrap;gap:5px}
-#chargeSavedToast{position:fixed;right:16px;bottom:16px;z-index:12;margin:0;padding:10px 14px;border-radius:8px;background:#135845;color:#fff;box-shadow:0 4px 14px #0003}
+#chargeSavedToast{position:fixed;top:50%;left:50%;transform:translate(-50%,-50%);width:max-content;max-width:calc(100vw - 32px);text-align:center;pointer-events:none;z-index:12;margin:0;padding:10px 14px;border-radius:8px;background:#135845;color:#fff;box-shadow:0 4px 14px #0003}
 @media(max-width:620px){
  #costSettings #areaCostSection .cost-inputs,#costSettings #operatingCostSection .charge-fields{grid-template-columns:repeat(2,minmax(0,1fr))}
  .saved-charge{grid-template-columns:minmax(0,1fr)}
@@ -884,7 +884,13 @@ const weekNumber = mondayDate => {
 function updateWeeks(chargeDates=[],keepSelection=false){
   const previous=el('week').value;
   const dates=[...activeOperations().map(o=>o.start.slice(0,10)),...chargeDates];
-  const weeks=[...new Set(dates.map(monday))].sort().reverse();
+  const month=el('monthFilter').value;
+  let weeks=[...new Set(dates.map(monday))].sort().reverse();
+  if(month){
+    const {date,periodEnd}=monthBounds(month);
+    weeks=[];
+    for(let week=monday(date);week<=periodEnd;week=addDays(week,7))weeks.unshift(week);
+  }
   el('week').innerHTML = '<option value="">All Week</option>'+weeks.map(w=>
   `<option value="${w}">${weekNumber(w)}</option>`).join('');
   el('week').value=keepSelection&&weeks.includes(previous)?previous:'';
@@ -1024,13 +1030,16 @@ el('monthFilter').addEventListener('change',()=>{
   el('week').value='';
   const period=value?monthBounds(value):null;
   from=period?.date??'';to=period?.periodEnd??'';
+  refreshCostWeeks(false);
   render();
 });
 el('week').addEventListener('change',()=>{
-  from=el('week').value;
-  to=from?addDays(from,6):'';
-  // Thursday falls in the month containing most days of the selected ISO week.
-  el('monthFilter').value=from?addDays(from,3).slice(0,7):'';
+  const week=el('week').value;
+  const month=el('monthFilter').value;
+  const period=month?monthBounds(month):null;
+  const weekEnd=week?addDays(week,6):'';
+  from=week&&(!period||week>period.date)?week:period?.date??'';
+  to=week&&(!period||weekEnd<period.periodEnd)?weekEnd:period?.periodEnd??'';
   render();
 });
 for(const id of ['direction','vehicle'])el(id).addEventListener('change',render);
@@ -1044,6 +1053,7 @@ el('reset').addEventListener('click',()=>{
   el('monthFilter').value=defaultDashboardMonth;
   const period=monthBounds(el('monthFilter').value);
   from=period.date;to=period.periodEnd;
+  refreshCostWeeks(false);
   render();
   observeChartFills();
 });
@@ -1092,6 +1102,7 @@ function commitDates(start,end){
   from=start; to=end;
   el('week').value='';
   el('monthFilter').value='';
+  refreshCostWeeks(false);
   el('rangeDialog').close();
   render();
 }
@@ -1263,7 +1274,7 @@ function renderAverageTimeCharts(rows,selected){
     });
   });
   const scale=Math.max(1,...groups.flat().map(group=>group.minutes));
-  const widthClass=selected||el('direction').value||groups.every(items=>items.length)?'':' chart-full-width';
+  const widthClass=selected||el('direction').value||el('kind').value||groups.every(items=>items.length)?'':' chart-full-width';
   return groups.map((items,index)=>{
     if(!items.length)return '';
     const direction=index?'Unloading':'Loading';
