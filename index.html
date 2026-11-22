@@ -678,6 +678,35 @@ button,input,select,textarea,::file-selector-button{font-family:inherit}
   .monthly-cost-grid{grid-template-columns:repeat(2,minmax(0,1fr));gap:8px}
   .monthly-cost-card strong{font-size:clamp(.84rem,3.8vw,1.12rem)}
 }
+#costSettings #costSections button{display:inline-flex;align-items:center;gap:6px;min-height:37px;padding:7px 11px;font-size:.86rem}
+#costSections svg{width:16px;height:16px;flex:none}
+#costSettings.charge-editor-open .cost-page-body{max-width:1060px;margin-inline:auto}
+#costSettings #areaCostSection .cost-inputs{grid-template-columns:repeat(2,minmax(0,1fr));gap:10px}
+#costSettings #areaCostSection .rate-box input{min-height:36px;font-size:.9rem}
+#costSettings #areaCostSection .rate-box button{min-height:32px;padding:5px 10px;font-size:.82rem}
+#costSettings #operatingCostSection .charge-fields{grid-template-columns:repeat(4,minmax(0,1fr));gap:10px}
+#costSettings #jobCharges label{max-width:100%}
+#costSettings #operatingCostSection label{min-width:0;font-size:.82rem}
+#costSettings #operatingCostSection input,#costSettings #operatingCostSection select{width:100%;min-width:0;min-height:38px;padding:6px 8px;font-size:.86rem}
+#costSettings #operatingCostSection .charge-rate-pair{grid-column:span 2;grid-template-columns:repeat(2,minmax(0,1fr));gap:10px}
+#costSettings .category-actions{justify-content:flex-end;gap:8px;margin-top:12px}
+#costSettings .category-actions button{min-height:36px;padding:6px 13px}
+#costSettings #chargePublishSlot{margin-top:8px;text-align:right}
+#costSettings #chargePublishSlot #publishJobCosts{width:auto}
+.saved-charge-list{margin-top:14px;border-top:1px solid #d8e4ef;padding-top:10px}
+.saved-charge-list h4{margin:0 0 8px}
+.saved-charge{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1fr) auto;align-items:center;gap:10px;margin-bottom:6px;padding:9px;background:#f3f7fb;border:1px solid #d9e5ef;border-radius:8px;overflow-wrap:anywhere}
+.saved-charge-info small{display:block;color:#52647b;margin-top:3px}
+.saved-charge-info p{margin:4px 0 0}
+.saved-charge dl{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:6px;margin:0;font-size:.8rem}
+.saved-charge dd{margin:0;font-weight:700}
+.saved-charge-actions{display:flex;flex-wrap:wrap;gap:5px}
+#chargeSavedToast{position:fixed;right:16px;bottom:16px;z-index:12;margin:0;padding:10px 14px;border-radius:8px;background:#135845;color:#fff;box-shadow:0 4px 14px #0003}
+@media(max-width:620px){
+ #costSettings #areaCostSection .cost-inputs,#costSettings #operatingCostSection .charge-fields{grid-template-columns:repeat(2,minmax(0,1fr))}
+ .saved-charge{grid-template-columns:minmax(0,1fr)}
+}
+@media(max-width:370px){#costSettings #areaCostSection .cost-inputs{grid-template-columns:1fr}}
 </style>
 <header class="dashboard-header"><div class="job-header-actions"><div class="header-scope"><label><span>Customer</span><select id="customer"></select></label>
 <label><span>Job</span><select id="job"></select></label></div><button id="openCosts" type="button" aria-haspopup="dialog"><svg class="ui-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" aria-hidden="true"><rect x="5" y="3" width="14" height="18" rx="2"/><path d="M8 8h8m-8 4h2m4 0h2m-8 4h2m4 0h2"/></svg>Job Costing</button><p id="payrollSession" role="status"></p><button id="payrollSignIn" type="button">Payroll sign in</button><button id="payrollSignOut" type="button" hidden>Sign out</button></div><div class="dashboard-title"><img class="gtl-header-logo" src="./logo-header.png?v=golden-cost-logo" width="512" height="460" alt="GTL Job Costing"><div><p class="dashboard-brand">Global Transportation and PVT LTD</p><h1>Warehouse Operations &amp; Job Costing</h1><small>Vehicle turnaround, crew hours and job costs</small></div></div>
@@ -726,7 +755,7 @@ button,input,select,textarea,::file-selector-button{font-family:inherit}
 <section class="rate-box" data-rate="load"><label>Loading · LKR / ft²<input name="load" type="number" min="0" step="any" readonly></label><button type="button" data-edit-rate>Edit</button><button type="button" data-save-rate disabled>Save</button></section>
 </div>
 </section>
-<div id="chargePublishSlot"></div>
+
 <section id="payrollCostSection"><h3>Labour Payroll</h3>
 <div id="payrollUploadPanel">
   <div class="payroll-upload-line">
@@ -771,9 +800,11 @@ button,input,select,textarea,::file-selector-button{font-family:inherit}
 <p id="chargePreview" class="muted" aria-live="polite"></p>
 <label id="vasDetailsField" hidden>VAS / Rework Details<textarea id="vasDetails" rows="3" maxlength="1000" placeholder="Describe the work, quantity or special instructions"></textarea></label>
 <div class="category-actions"><button id="addJobCharge" type="button">Add Item</button><button id="saveJobCharges" type="button">Save Item</button></div>
-<div id="savedCategory" aria-live="polite"></div>
+<div id="chargePublishSlot"></div>
+<section class="saved-charge-list"><h4>Saved charges</h4><div id="savedCategory"></div></section>
 </section>
 <p id="costMessage" class="muted" role="status"></p>
+<p id="chargeSavedToast" role="status" hidden></p>
 </div>
 
 </form>
@@ -1085,6 +1116,7 @@ const categoryOptions={
 let selectedCostTab='payroll';
 function selectCostTab(key){
   selectedCostTab=key;
+  el('costSettings').classList.toggle('charge-editor-open',key!=='payroll');
   el(key==='payroll'?'payrollPublishSlot':'chargePublishSlot').append(el('publishJobCostControls'));
   el('payrollCostSection').hidden=key!=='payroll';
   el('areaCostSection').hidden=key!=='storage';
@@ -1097,7 +1129,15 @@ function selectCostTab(key){
   for(const row of el('jobCharges').children)row.hidden=row.dataset.category!==key;
   if(key!=='payroll')refreshCategory();
 }
-el('costSections').innerHTML=costTabs.map(([key,label])=>`<button type="button" data-cost-tab="${key}" aria-pressed="false">${esc(label)}</button>`).join('');
+const costTabIcons={
+  payroll:'<path d="M4 19h16M7 15v-4m5 4V5m5 10V8"/>',
+  storage:'<rect x="4" y="4" width="16" height="16" rx="2"/><path d="M4 9h16m-8 0v11"/>',
+  equipment:'<circle cx="12" cy="12" r="7"/><path d="M12 8v8m-4-4h8"/>',
+  consumables:'<path d="m4 7 8-4 8 4v10l-8 4-8-4zM4 7l8 4 8-4m-8 4v10"/>',
+  vas:'<path d="M4 15h16M7 15v4m10-4v4M5 11l5-6 4 3 5-4"/>',
+  thirdParty:'<rect x="4" y="6" width="16" height="14" rx="2"/><path d="M9 6V4h6v2m-11 6h16"/>'
+};
+el('costSections').innerHTML=costTabs.map(([key,label])=>`<button type="button" data-cost-tab="${key}" aria-pressed="false"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" aria-hidden="true">${costTabIcons[key]}</svg>${esc(label)}</button>`).join('');
 el('costSections').addEventListener('click',event=>{
   const button=event.target.closest('[data-cost-tab]');
   if(button)selectCostTab(button.dataset.costTab);
@@ -1450,6 +1490,14 @@ function roleOrder(person){
   const rank=crewRoles.findIndex(([role])=>(person.designation??person.category??'').toLowerCase().includes(role.toLowerCase()));
   return rank<0?crewRoles.length:rank;
 }
+let chargeSavedTimer;
+function showChargeSaved(){
+  const toast=el('chargeSavedToast');
+  clearTimeout(chargeSavedTimer);
+  toast.hidden=false;
+  toast.textContent='Saved successfully to this browser';
+  chargeSavedTimer=setTimeout(()=>{toast.hidden=true;toast.textContent='';},2800);
+}
 function saveCosts(updated){
   try{
     localStorage.setItem(costStorageKey(),JSON.stringify(updated));
@@ -1459,7 +1507,9 @@ function saveCosts(updated){
   }
   costSettings=updated;
   refreshCostWeeks(true);
-  el('costMessage').textContent='Saved. Dashboard costs updated.';
+  const onPayroll=selectedCostTab==='payroll';
+  el('costMessage').textContent=onPayroll?'Saved. Dashboard costs updated.':'';
+  if(!onPayroll)showChargeSaved();
   render();
   return true;
 }
@@ -1496,7 +1546,7 @@ el('payrollPinForm').addEventListener('submit',event=>{
   el('costMessage').textContent='';
   el('jobCostContext').textContent=`${el('customer').value} · Job ${el('job').value}`;
   el('jobCharges').innerHTML=chargeCategories.map(([key,label])=>
-    `<label data-category="${key}">Item / Service<select aria-label="${esc(label)} item"><option value="">Select item</option>${optionList(categoryOptions[key])}</select></label>`).join('');
+    `<label data-category="${key}">Item / Service<input list="charge-items-${key}" aria-label="${esc(label)} item" placeholder="Choose or type an item"><datalist id="charge-items-${key}">${optionList(categoryOptions[key])}</datalist></label>`).join('');
   el('vasDetails').value=costSettings.vasDetails??'';
   selectCostTab('payroll');
   el('costSettings').scrollTop=0;
@@ -2318,7 +2368,7 @@ for(const id of ['chargeUnit','chargeQuantity','chargeRate','chargeCurrency'])el
 function fillChargeEditor(entry={}){
   const row=currentCategoryRow();
   if(!row)return;
-  row.querySelector('select').value=entry.item??'';
+  row.querySelector('input').value=entry.item??'';
   const weekOnly=entry.periodEnd&&entry.periodEnd!==entry.date;
   el('chargeDate').value=weekOnly?'':entry.date??'';
   el('chargeMonth').value=entry.month??'';
@@ -2337,7 +2387,19 @@ function refreshCategory(){
   editChargeIndex=null;
   fillChargeEditor();
   el('saveJobCharges').textContent='Save Item';
-  el('savedCategory').innerHTML=categoryEntries(selectedCostTab).map((entry,index)=>`<div class="saved-category"><span><strong>${esc(entry.item||'Saved item')}</strong>${entry.fx?` · USD ${fmt(entry.originalRate,2)} / unit × ${fmt(entry.fx.rate,5)} (${esc(entry.fx.date)})`:''} · ${entry.date?(entry.periodEnd&&entry.periodEnd!==entry.date?(entry.month||isoWeekValue(entry.date)):esc(entry.date)+' · W'+weekNumber(monday(entry.date)))+' · '+fmt(entry.quantity,3)+' '+esc(entry.unit):'Undated monthly charge'} · Unloading ${knownAmount(entry.U)?money(chargeTotal(entry,'U')):'—'} · Loading ${knownAmount(entry.L)?money(chargeTotal(entry,'L')):'—'}${entry.notes?' · '+esc(entry.notes):''}</span><button type="button" data-edit-charge="${index}">Edit</button><button type="button" data-remove-charge="${index}">Remove</button></div>`).join('');
+  const entries=categoryEntries(selectedCostTab);
+  el('savedCategory').innerHTML=entries.map((entry,index)=>{
+    const period=entry.month||(entry.date?(entry.periodEnd&&entry.periodEnd!==entry.date?isoWeekValue(entry.date):entry.date):'Undated monthly charge');
+    const unit=entry.date?` · ${fmt(entry.quantity,3)} ${esc(entry.unit)}`:'';
+    const fx=entry.fx?` · USD ${fmt(entry.originalRate,2)}/unit × ${fmt(entry.fx.rate,5)} (${esc(entry.fx.date)})`:'';
+    return `<article class="saved-charge">
+      <div class="saved-charge-info"><strong>${esc(entry.item||'Saved item')}</strong><small>${esc(period)}${unit}${fx}${entry.vehicle?' · Vehicle '+esc(entry.vehicle):''}</small>
+      ${entry.notes?`<p>${esc(entry.notes)}</p>`:''}</div>
+      <dl><div><dt>Loading</dt><dd>${knownAmount(entry.L)?money(chargeTotal(entry,'L')):'—'}</dd></div>
+          <div><dt>Unloading</dt><dd>${knownAmount(entry.U)?money(chargeTotal(entry,'U')):'—'}</dd></div></dl>
+      <div class="saved-charge-actions"><button type="button" data-edit-charge="${index}">Edit</button><button type="button" data-remove-charge="${index}">Remove</button></div>
+    </article>`;
+  }).join('')||'<p class="muted">No charges saved for this category.</p>';
 }
 function persistChargeEntries(entries){
   const key=selectedCostTab;
@@ -2352,12 +2414,12 @@ el('addJobCharge').addEventListener('click',()=>{
   editChargeIndex=null;
   fillChargeEditor();
   el('saveJobCharges').textContent='Save Item';
-  currentCategoryRow()?.querySelector('select').focus();
+  currentCategoryRow()?.querySelector('input').focus();
 });
 el('saveJobCharges').addEventListener('click',async()=>{
   const row=currentCategoryRow();
   if(!row)return;
-  const item=row.querySelector('select').value;
+  const item=row.querySelector('input').value.trim();
   const currency=el('chargeCurrency').value;
   const rate=amount(el('chargeRate').value);
   const direction=el('chargeDirection').value;
@@ -2366,8 +2428,8 @@ el('saveJobCharges').addEventListener('click',async()=>{
   const quantity=unit==='One-time'?1:amount(el('chargeQuantity').value);
   const vehicle=el('chargeVehicle').value;
   if(!item.trim()){
-    el('costMessage').textContent='Select an Item / Service before saving.';
-    row.querySelector('select').focus();
+    el('costMessage').textContent='Choose or type an Item / Service before saving.';
+    row.querySelector('input').focus();
     return;
   }
   if(!period||!knownAmount(rate)||!(Number.isFinite(quantity)&&quantity>0)||!chargeUnits[selectedCostTab].includes(unit)){
@@ -2418,7 +2480,7 @@ el('savedCategory').addEventListener('click',event=>{
   editChargeIndex=Number(button.dataset.editCharge);
   fillChargeEditor(entries[editChargeIndex]);
   el('saveJobCharges').textContent='Save Changes';
-  currentCategoryRow()?.querySelector('select').focus();
+  currentCategoryRow()?.querySelector('input').focus();
 });
 el('costForm').addEventListener('submit',event=>event.preventDefault());
 el('costForm').addEventListener('click',event=>{
