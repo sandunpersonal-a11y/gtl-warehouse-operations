@@ -707,6 +707,13 @@ button,input,select,textarea,::file-selector-button{font-family:inherit}
  .saved-charge{grid-template-columns:minmax(0,1fr)}
 }
 @media(max-width:370px){#costSettings #areaCostSection .cost-inputs{grid-template-columns:1fr}}
+.shared-cost-details{margin-top:5px;font-size:.72rem}
+.shared-cost-details summary{cursor:pointer;font-weight:600}
+.shared-cost-details ul{margin:4px 0 0;padding:0;list-style:none}
+.shared-cost-details li{display:flex;justify-content:space-between;flex-wrap:wrap;gap:2px 6px;padding:2px 0}
+.monthly-export{display:flex;justify-content:flex-end;align-items:center;flex-wrap:wrap;gap:8px;margin:8px 0;font-size:.75rem}
+#downloadMonthlyExcel{width:auto;padding:5px 9px;font-size:.75rem}
+#downloadMonthlyExcel[hidden]{display:none}
 </style>
 <header class="dashboard-header"><div class="job-header-actions"><div class="header-scope"><label><span>Customer</span><select id="customer"></select></label>
 <label><span>Job</span><select id="job"></select></label></div><button id="openCosts" type="button" aria-haspopup="dialog"><svg class="ui-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" aria-hidden="true"><rect x="5" y="3" width="14" height="18" rx="2"/><path d="M8 8h8m-8 4h2m4 0h2m-8 4h2m4 0h2"/></svg>Job Costing</button><p id="payrollSession" role="status"></p><button id="payrollSignIn" type="button">Payroll sign in</button><button id="payrollSignOut" type="button" hidden>Sign out</button></div><div class="dashboard-title"><img class="gtl-header-logo" src="./logo-header.png?v=golden-cost-logo" width="512" height="460" alt="GTL Job Costing"><div><p class="dashboard-brand">Global Transportation and PVT LTD</p><h1>Warehouse Operations &amp; Job Costing</h1><small>Vehicle turnaround, crew hours and job costs</small></div></div>
@@ -728,6 +735,10 @@ button,input,select,textarea,::file-selector-button{font-family:inherit}
 <section class="chart-grid" id="charts" aria-label="Operations charts"></section>
 <section class="panel" id="movementUploadPanel"><div class="movement-upload-row"><label id="movementUploadLabel" hidden>Upload Movement Report (.xlsx)<input id="movementUpload" type="file" accept=".xlsx"></label><span>Last movement upload · Sri Lanka <strong id="movementLastUpload">Loading…</strong></span></div><p id="movementStatus" role="status"></p></section>
 <footer class="muted">Source: uploaded Movement Reports and baseline operations · Operations shown for the selected customer and job. Date filters use operation start dates. Estimated pick and unloading areas use 1.7 CBM per 25 sq ft. The workbook has no unloading location, delay or employee name fields.</footer>
+<section class="monthly-export" aria-label="Monthly Excel export">
+  <button type="button" id="downloadMonthlyExcel" hidden>Download Excel File</button>
+  <span id="monthlyExportStatus" role="status"></span>
+</section>
 </main>
 <footer class="dashboard-credit">Designed and developed by <strong>Sandun Jayaweera</strong></footer>
 
@@ -1221,6 +1232,29 @@ function operationCosts(visit,rows,direction,vehicleOnly=false,allVehicleTypes=f
   const complete=rows.length>0&&matched.length===rows.length&&matched.every(entry=>entry.complete)&&knownAmount(rate);
   return {matched,shared,labour,rate,areaCost,dated,categoryCosts,operatingCost,complete};
 }
+function monthlyCostReport(){
+  const month=el('monthFilter').value;
+  const rows=activeOperations().filter(row=>row.start.slice(0,7)===month);
+  const [loading,unloading]=['L','U'].map(direction=>
+    operationCosts(null,rows.filter(row=>row.direction===direction),direction,false,true));
+  const total=cost=>cost.labour+cost.areaCost+cost.operatingCost;
+  const settings=dashboardJobCosts();
+  const charges=chargeCategories.flatMap(([category,label])=>categoryEntries(category,settings)
+    .filter(entry=>!entry.date||(entry.date>=from&&entry.date<=to))
+    .flatMap(entry=>['L','U','UL'].flatMap(direction=>{
+      const amount=chargeTotal(entry,direction);
+      return amount===null||(!entry.date&&direction==='UL')?[]:[{label,entry,direction,amount}];
+    })));
+  const sharedCharges=charges.filter(charge=>charge.direction==='UL');
+  const shared=sharedCharges.reduce((sum,charge)=>sum+charge.amount,0);
+  const figures=[
+    ['labour','Labour Cost',loading.labour,unloading.labour],
+    ['area','Area Cost',loading.areaCost,unloading.areaCost],
+    ['other','Other Costs',loading.operatingCost,unloading.operatingCost,shared],
+    ['total','Total Monthly Cost',total(loading),total(unloading),shared]
+  ];
+  return {month,rows,figures,charges,sharedCharges,loading,unloading};
+}
 let monthlyCostKey;
 function renderMonthlyCosts(visit){
   const section=el('monthlyCosts');
@@ -1229,23 +1263,9 @@ function renderMonthlyCosts(visit){
     monthlyCostKey=undefined;
     return;
   }
-  const month=el('monthFilter').value;
-  const rows=activeOperations().filter(row=>row.start.slice(0,7)===month);
-  const [loading,unloading]=['L','U'].map(direction=>
-    operationCosts(null,rows.filter(row=>row.direction===direction),direction,false,true));
-  const total=cost=>cost.labour+cost.areaCost+cost.operatingCost;
-  const settings=dashboardJobCosts();
-  const shared=chargeCategories.reduce((total,[key])=>total+categoryEntries(key,settings)
-    .filter(entry=>entry.date&&entry.date>=from&&entry.date<=to)
-    .reduce((sum,entry)=>sum+(chargeTotal(entry,'UL')??0),0),0);
-  const figures=[
-    ['labour','Labour Cost',loading.labour,unloading.labour],
-    ['area','Area Cost',loading.areaCost,unloading.areaCost],
-    ['other','Other Costs',loading.operatingCost,unloading.operatingCost,shared],
-    ['total','Total Monthly Cost',total(loading),total(unloading),shared]
-  ];
+  const {month,figures,sharedCharges}=monthlyCostReport();
   const scope=JSON.stringify([el('customer').value,el('job').value,month]);
-  const key=JSON.stringify([scope,figures]);
+  const key=JSON.stringify([scope,figures,sharedCharges]);
   section.hidden=false;
   if(key===monthlyCostKey)return;
   monthlyCostKey=key;
@@ -1257,6 +1277,9 @@ function renderMonthlyCosts(visit){
         <dl><div><dt>Loading</dt><dd>${money(l)}</dd></div>
             <div><dt>Unloading</dt><dd>${money(u)}</dd></div>
             ${both>0?`<div><dt>Both (U/L)</dt><dd>${money(both)}</dd></div>`: ''}</dl>
+        ${kind==='other'&&sharedCharges.length?`<details class="shared-cost-details"><summary>Both (U/L) charges</summary>
+          <ul>${sharedCharges.map(({label,entry,amount})=>`<li><span>${esc(entry.item||label)} · ${esc(entry.date)}</span><b>${money(amount)}</b></li>`).join('')}</ul>
+        </details>`:''}
       </article>`).join('')}</div>`;
   if(matchMedia('(prefers-reduced-motion: reduce)').matches)return;
   const amounts=[...section.querySelectorAll('[data-monthly-amount]')];
@@ -1270,6 +1293,96 @@ function renderMonthlyCosts(visit){
   }
   requestAnimationFrame(count);
 }
+function monthlyExcelSheets(report,customer,job,crews,publications){
+  const summary=[['Month',report.month],['Customer',customer],['Job',job],[],
+    ['Cost','Loading (LKR)','Unloading (LKR)','Both U/L (LKR)','Total (LKR)'],
+    ...report.figures.map(([,label,l,u,both=0])=>[label,l,u,both,l+u+both]),[],
+    ['Reconciliation','Monthly total = vehicle labour + vehicle area + Other Charges.'],
+    ['Crew detail','Published labour costs are per role and vehicle. EPFs identify crew and do not represent individual cost allocations.'],
+    ['Coverage','Blank labour costs indicate missing published data. Amounts use the dashboard calculation precision.']];
+  const vehicles=[['Operation ID','Operation','Vehicle','Vehicle Type','Start','End','Day Hours','OT Hours','Total Hours','Published Labour LKR','Area LKR','Labour Coverage']];
+  const labour=[['Operation ID','Operation','Vehicle','Vehicle Type','Role','EPF Numbers','Published Day Labour Hours','Published OT Labour Hours','Day Labour LKR','OT Labour LKR','Role Labour LKR']];
+  const charges=[['Category','Item','Operation','Date','Period End','Quantity','Vehicle','Amount LKR']];
+  for(const row of report.rows){
+    const publication=publications.get(row.id);
+    const time=splitWorkingMinutes(row.start,row.end);
+    const rate=(row.direction==='L'?report.loading:report.unloading).rate;
+    const common=[String(row.id),operationName(row.direction),row.vehicle,row.kind];
+    vehicles.push([...common,row.start,row.end,time?time.day/60:null,time?time.ot/60:null,time?(time.day+time.ot)/60:null,
+      publication?.amount??null,knownAmount(rate)?estimatedArea(row.cbm)*rate:0,publication?(publication.complete?'Complete':'Partial'):'Not published']);
+    const crew=row.crewPrivate?crews.get(String(row.id)):row;
+    for(const [role,field] of crewRoles){
+      const ids=[...new Set((crew?.[field]??[]).map(payrollEpf).filter(id=>id&&id!=='0'))];
+      const cost=publication?.roles?.find(entry=>entry.role===role);
+      if(!ids.length&&!cost)continue;
+      labour.push([...common,role,ids.join(', '),cost?.dayMinutes==null?null:cost.dayMinutes/60,cost?.otMinutes==null?null:cost.otMinutes/60,
+        cost?.dayCost??null,cost?.otCost??null,cost?.totalCost??null]);
+    }
+  }
+  for(const {label,entry,direction,amount} of report.charges){
+    charges.push([label,entry.item??'',direction==='UL'?'Both (U/L)':operationName(direction),entry.date??'',entry.periodEnd??'',entry.quantity??1,entry.vehicle??'',amount]);
+  }
+  return [['Summary',summary],['Vehicles',vehicles],['Labour and EPF',labour],['Other Charges',charges]];
+}
+async function buildMonthlyExcel(sheets){
+  const zip=new JSZip();
+  const ns='http://schemas.openxmlformats.org';
+  const rel=ns+'/officeDocument/2006/relationships';
+  const content='application/vnd.openxmlformats-officedocument.spreadsheetml';
+  const xml=value=>esc(String(value).replace(/[\x00-\x08\x0b\x0c\x0e-\x1f]/g,''));
+  const relationships=items=>`<Relationships xmlns="${ns}/package/2006/relationships">${items.map(([id,type,target])=>`<Relationship Id="${id}" Type="${rel}/${type}" Target="${target}"/>`).join('')}</Relationships>`;
+  zip.file('[Content_Types].xml',`<Types xmlns="${ns}/package/2006/content-types"><Default Extension="rels" ContentType="application/vnd.openxmlformats-package.relationships+xml"/><Default Extension="xml" ContentType="application/xml"/><Override PartName="/xl/workbook.xml" ContentType="${content}.sheet.main+xml"/>${sheets.map((_,i)=>`<Override PartName="/xl/worksheets/sheet${i+1}.xml" ContentType="${content}.worksheet+xml"/>`).join('')}</Types>`);
+  zip.file('_rels/.rels',relationships([['rId1','officeDocument','xl/workbook.xml']]));
+  zip.file('xl/workbook.xml',`<workbook xmlns="${ns}/spreadsheetml/2006/main" xmlns:r="${rel}"><sheets>${sheets.map(([name],i)=>`<sheet name="${xml(name)}" sheetId="${i+1}" r:id="rId${i+1}"/>`).join('')}</sheets></workbook>`);
+  zip.file('xl/_rels/workbook.xml.rels',relationships(sheets.map((_,i)=>[`rId${i+1}`,'worksheet',`worksheets/sheet${i+1}.xml`])));
+  sheets.forEach(([,rows],i)=>{
+    const body=rows.map((row,j)=>`<row r="${j+1}">${row.map((cell,k)=>{
+      if(cell==null)return '';
+      const address=String.fromCharCode(65+k)+(j+1);
+      return Number.isFinite(cell)?`<c r="${address}"><v>${cell}</v></c>`:`<c r="${address}" t="inlineStr"><is><t xml:space="preserve">${xml(cell)}</t></is></c>`;
+    }).join('')}</row>`).join('');
+    zip.file(`xl/worksheets/sheet${i+1}.xml`,`<worksheet xmlns="${ns}/spreadsheetml/2006/main"><cols><col min="1" max="14" width="22" customWidth="1"/></cols><sheetData>${body}</sheetData></worksheet>`);
+  });
+  return zip.generateAsync({type:'blob',compression:'DEFLATE',mimeType:content+'.sheet'});
+}
+el('downloadMonthlyExcel').addEventListener('click',async()=>{
+  if(!canManagePayroll())return;
+  const status=el('monthlyExportStatus');
+  const button=el('downloadMonthlyExcel');
+  if(!showsMonthlyCharges(null)){
+    status.textContent='Select a full month before downloading.';
+    return;
+  }
+  const account=payrollUser.id;
+  const customer=el('customer').value,job=el('job').value;
+  const report=monthlyCostReport();
+  const publications=new Map(report.rows.map(row=>[row.id,operationPublication(row)]));
+  button.disabled=true;
+  status.textContent='Preparing Excel…';
+  try{
+    if(!window.JSZip)throw new Error('Excel support is unavailable.');
+    const crewRows=report.rows.some(row=>row.crewPrivate)
+      ?await monthlyPayrollRpc('gtl_private_movement_crews',{period:report.month}):[];
+    if(payrollUser?.id!==account||!canManagePayroll()){status.textContent='';return;}
+    const crews=new Map(crewRows.map(row=>[String(row.id),row]));
+    const blob=await buildMonthlyExcel(monthlyExcelSheets(report,customer,job,crews,publications));
+    if(payrollUser?.id!==account||!canManagePayroll()){status.textContent='';return;}
+    const url=URL.createObjectURL(blob);
+    const link=document.createElement('a');
+    link.href=url;
+    link.download=`GTL-${customer}-${job}-${report.month}.xlsx`.replace(/[^a-z0-9_.-]/gi,'-');
+    document.body.append(link);
+    link.click();
+    link.remove();
+    setTimeout(()=>URL.revokeObjectURL(url),30000);
+    status.textContent='Excel download ready.';
+  }catch(error){
+    status.textContent='Excel export failed: '+error.message;
+  }finally{
+    button.disabled=false;
+  }
+});
+
 function renderAverageTimeCharts(rows,selected){
   const groups=['L','U'].map(direction=>{
     const timed=rows.filter(row=>row.direction===direction&&Number.isFinite(row.minutes)&&row.minutes>=0);
@@ -1753,6 +1866,7 @@ function setPayrollSession(user){
   el('payrollSignOut').hidden=!user;
   const email=user?.email?.trim().toLowerCase();
   const canUpload=email===payrollAdminEmail;
+  el('downloadMonthlyExcel').hidden=!canUpload;
   el('payrollUploadLabel').hidden=!canUpload;
   el('addPay').hidden=!canUpload;
   el('publishJobCostControls').hidden=!canUpload;
