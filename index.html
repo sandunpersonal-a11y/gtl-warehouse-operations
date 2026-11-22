@@ -1234,11 +1234,15 @@ function renderMonthlyCosts(visit){
   const [loading,unloading]=['L','U'].map(direction=>
     operationCosts(null,rows.filter(row=>row.direction===direction),direction,false,true));
   const total=cost=>cost.labour+cost.areaCost+cost.operatingCost;
+  const settings=dashboardJobCosts();
+  const shared=chargeCategories.reduce((total,[key])=>total+categoryEntries(key,settings)
+    .filter(entry=>entry.date&&entry.date>=from&&entry.date<=to)
+    .reduce((sum,entry)=>sum+(chargeTotal(entry,'UL')??0),0),0);
   const figures=[
     ['labour','Labour Cost',loading.labour,unloading.labour],
     ['area','Area Cost',loading.areaCost,unloading.areaCost],
-    ['other','Other Costs',loading.operatingCost,unloading.operatingCost],
-    ['total','Total Monthly Cost',total(loading),total(unloading)]
+    ['other','Other Costs',loading.operatingCost,unloading.operatingCost,shared],
+    ['total','Total Monthly Cost',total(loading),total(unloading),shared]
   ];
   const scope=JSON.stringify([el('customer').value,el('job').value,month]);
   const key=JSON.stringify([scope,figures]);
@@ -1247,11 +1251,12 @@ function renderMonthlyCosts(visit){
   monthlyCostKey=key;
   const period=new Intl.DateTimeFormat('en-LK',{month:'long',year:'numeric',timeZone:'UTC'}).format(new Date(month+'-01T00:00:00Z'));
   section.innerHTML=`<div class="monthly-cost-heading"><h2 id="monthlyCostsHeading">Monthly Cost Summary · ${period}</h2></div>
-    <div class="monthly-cost-grid">${figures.map(([kind,label,l,u])=>`
+    <div class="monthly-cost-grid">${figures.map(([kind,label,l,u,both=0])=>`
       <article class="monthly-cost-card monthly-cost-${kind}">
-        <h3>${label}</h3><strong data-monthly-amount="${l+u}">${money(l+u)}</strong>
+        <h3>${label}</h3><strong data-monthly-amount="${l+u+both}">${money(l+u+both)}</strong>
         <dl><div><dt>Loading</dt><dd>${money(l)}</dd></div>
-            <div><dt>Unloading</dt><dd>${money(u)}</dd></div></dl>
+            <div><dt>Unloading</dt><dd>${money(u)}</dd></div>
+            ${both>0?`<div><dt>Both (U/L)</dt><dd>${money(both)}</dd></div>`: ''}</dl>
       </article>`).join('')}</div>`;
   if(matchMedia('(prefers-reduced-motion: reduce)').matches)return;
   const amounts=[...section.querySelectorAll('[data-monthly-amount]')];
@@ -1801,7 +1806,7 @@ function publishJobCosts(){
   const costs={
     load:costSettings.load??null,unload:costSettings.unload??null,
     chargeEntries:Object.fromEntries(chargeCategories.map(([key])=>[key,categoryEntries(key).map(entry=>({
-      U:entry.U??null,L:entry.L??null,date:entry.date??null,periodEnd:entry.periodEnd??null,
+      U:chargeRateFor(entry,'U'),L:chargeRateFor(entry,'L'),UL:chargeRateFor(entry,'UL'),date:entry.date??null,periodEnd:entry.periodEnd??null,
       quantity:entry.quantity??1,vehicle:entry.vehicle??null
     }))]))
   };
@@ -2313,16 +2318,24 @@ const chargeUnits={
   vas:['CBM','Cartons','Units','Pallets','Hours','One-time'],
   thirdParty:['Service','Hours','Days','Trips','One-time']
 };
+function chargeRateFor(entry,direction){
+  const shared=entry.operation==='UL'||knownAmount(entry.UL);
+  if(direction==='UL'){
+    if(knownAmount(entry.UL))return entry.UL;
+    return shared&&knownAmount(entry.U)&&knownAmount(entry.L)?entry.U+entry.L:null;
+  }
+  return !shared&&knownAmount(entry[direction])?entry[direction]:null;
+}
 function chargeTotal(entry,direction){
-  if(!knownAmount(entry[direction]))return null;
-  return entry[direction]*(entry.date?entry.quantity:1);
+  const rate=chargeRateFor(entry,direction);
+  return rate===null?null:rate*(entry.date?entry.quantity:1);
 }
 function datedCharges(rows,direction,visit,settings=costSettings,allVehicleTypes=false){
   const ids=new Set(rows.map(row=>row.id));
   const filterType=!allVehicleTypes&&el('kind').value;
   if(!showsMonthlyCharges(visit))return [];
   return chargeCategories.flatMap(([key,label])=>categoryEntries(key,settings)
-    .filter(entry=>entry.date&&entry.date>=from&&entry.date<=to&&knownAmount(entry[direction])&&
+    .filter(entry=>entry.date&&entry.date>=from&&entry.date<=to&&chargeRateFor(entry,direction)!==null&&
       (!filterType||ids.has(entry.vehicle)))
     .map(entry=>({key,label,entry,total:chargeTotal(entry,direction)})));
 }
@@ -2364,7 +2377,7 @@ function refreshChargePreview(){
   const qty=amount(el('chargeQuantity').value);
   const rate=amount(el('chargeRate').value);
   const direction=el('chargeDirection').value;
-  const label=direction==='UL'?'Both (U/L) · Total split 50/50':operationName(direction);
+  const label=direction==='UL'?'Both (U/L) · Shared monthly charge':operationName(direction);
   el('chargePreview').textContent=knownAmount(rate)&&qty>0?label+' · '+(el('chargeCurrency').value==='USD'?'USD '+fmt(qty*rate,2)+' · converts on save':money(qty*rate)):'';
 }
 el('chargeDate').addEventListener('input',()=>{
@@ -2387,9 +2400,9 @@ function fillChargeEditor(entry={}){
   el('chargeUnit').innerHTML=optionList(chargeUnits[selectedCostTab]);
   el('chargeUnit').value=entry.unit??chargeUnits[selectedCostTab][0];
   el('chargeQuantity').value=entry.quantity??1;
-  el('chargeDirection').value=entry.operation??(knownAmount(entry.L)?(knownAmount(entry.U)?'UL':'L'):knownAmount(entry.U)?'U':'UL');
+  el('chargeDirection').value=entry.operation??(knownAmount(entry.UL)?'UL':knownAmount(entry.U)?'U':knownAmount(entry.L)?'L':'UL');
   el('chargeCurrency').value=entry.currency??'LKR';
-  el('chargeRate').value=entry.originalRate??(el('chargeDirection').value==='UL'?(knownAmount(entry.U)&&knownAmount(entry.L)?entry.U+entry.L:''):entry[el('chargeDirection').value])??'';
+  el('chargeRate').value=entry.originalRate??chargeRateFor(entry,el('chargeDirection').value)??'';
   updateChargeVehicles(entry.vehicle);
   if(selectedCostTab==='vas')el('vasDetails').value=entry.notes??'';
   refreshChargePreview();
@@ -2406,8 +2419,10 @@ function refreshCategory(){
     return `<article class="saved-charge">
       <div class="saved-charge-info"><strong>${esc(entry.item||'Saved item')}</strong><small>${esc(period)}${unit}${fx}${entry.vehicle?' · Vehicle '+esc(entry.vehicle):''}</small>
       ${entry.notes?`<p>${esc(entry.notes)}</p>`:''}</div>
-      <dl><div><dt>Loading</dt><dd>${knownAmount(entry.L)?money(chargeTotal(entry,'L')):'—'}</dd></div>
-          <div><dt>Unloading</dt><dd>${knownAmount(entry.U)?money(chargeTotal(entry,'U')):'—'}</dd></div></dl>
+      <dl>${chargeRateFor(entry,'UL')!==null
+        ?`<div><dt>Both (U/L)</dt><dd>${money(chargeTotal(entry,'UL'))}</dd></div>`
+        :`<div><dt>Loading</dt><dd>${chargeRateFor(entry,'L')!==null?money(chargeTotal(entry,'L')):'—'}</dd></div>
+          <div><dt>Unloading</dt><dd>${chargeRateFor(entry,'U')!==null?money(chargeTotal(entry,'U')):'—'}</dd></div>`}</dl>
       <div class="saved-charge-actions"><button type="button" data-edit-charge="${index}">Edit</button><button type="button" data-remove-charge="${index}">Remove</button></div>
     </article>`;
   }).join('')||'<p class="muted">No charges saved for this category.</p>';
@@ -2416,7 +2431,7 @@ function persistChargeEntries(entries){
   const key=selectedCostTab;
   const charges={U:{...costSettings.charges?.U},L:{...costSettings.charges?.L}};
   for(const d of ['U','L']){
-    const amounts=entries.filter(entry=>!entry.date).map(entry=>entry[d]).filter(knownAmount);
+    const amounts=entries.filter(entry=>!entry.date).map(entry=>chargeRateFor(entry,d)).filter(knownAmount);
     charges[d][key]=amounts.length?amounts.reduce((total,value)=>total+value,0):null;
   }
   if(saveCosts({...costSettings,charges,chargeEntries:{...costSettings.chargeEntries,[key]:entries}})){refreshCategory();publishJobCosts();}
@@ -2469,8 +2484,7 @@ el('saveJobCharges').addEventListener('click',async()=>{
       button.disabled=false;
     }
   }
-  if(direction==='UL')Object.assign(entry,{U:lkrRate/2,L:lkrRate/2});
-  else entry[direction]=lkrRate;
+  entry[direction]=lkrRate;
   const entries=[...categoryEntries(selectedCostTab)];
   if(editChargeIndex===null)entries.push(entry);
   else{
