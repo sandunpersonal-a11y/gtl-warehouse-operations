@@ -2407,6 +2407,12 @@ function fillChargeEditor(entry={}){
   if(selectedCostTab==='vas')el('vasDetails').value=entry.notes??'';
   refreshChargePreview();
 }
+function mergeSplitCharge(entry){
+  if(!entry?.date||chargeRateFor(entry,'UL')!==null||
+    chargeRateFor(entry,'L')===null||chargeRateFor(entry,'U')===null)return null;
+  const {L,U,...rest}=entry;
+  return {...rest,operation:'UL',UL:L+U,vehicle:''};
+}
 function refreshCategory(){
   editChargeIndex=null;
   fillChargeEditor();
@@ -2423,7 +2429,7 @@ function refreshCategory(){
         ?`<div><dt>Both (U/L)</dt><dd>${money(chargeTotal(entry,'UL'))}</dd></div>`
         :`<div><dt>Loading</dt><dd>${chargeRateFor(entry,'L')!==null?money(chargeTotal(entry,'L')):'—'}</dd></div>
           <div><dt>Unloading</dt><dd>${chargeRateFor(entry,'U')!==null?money(chargeTotal(entry,'U')):'—'}</dd></div>`}</dl>
-      <div class="saved-charge-actions"><button type="button" data-edit-charge="${index}">Edit</button><button type="button" data-remove-charge="${index}">Remove</button></div>
+      <div class="saved-charge-actions">${mergeSplitCharge(entry)?`<button type="button" data-merge-charge="${index}">Move to Both (U/L)</button>`: ''}<button type="button" data-edit-charge="${index}">Edit</button><button type="button" data-remove-charge="${index}">Remove</button></div>
     </article>`;
   }).join('')||'<p class="muted">No charges saved for this category.</p>';
 }
@@ -2495,9 +2501,15 @@ el('saveJobCharges').addEventListener('click',async()=>{
   persistChargeEntries(entries);
 });
 el('savedCategory').addEventListener('click',event=>{
-  const button=event.target.closest('[data-edit-charge],[data-remove-charge]');
+  const button=event.target.closest('[data-edit-charge],[data-remove-charge],[data-merge-charge]');
   if(!button)return;
   const entries=categoryEntries(selectedCostTab);
+  if(button.hasAttribute('data-merge-charge')){
+    const index=Number(button.dataset.mergeCharge);
+    const merged=mergeSplitCharge(entries[index]);
+    if(merged)persistChargeEntries(entries.map((entry,i)=>i===index?merged:entry));
+    return;
+  }
   if(button.hasAttribute('data-remove-charge')){
     persistChargeEntries(entries.filter((entry,index)=>index!==Number(button.dataset.removeCharge)));
     return;
