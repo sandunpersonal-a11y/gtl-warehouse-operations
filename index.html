@@ -659,6 +659,27 @@ button,input,select,textarea,::file-selector-button{font-family:inherit}
 .labour-bar-value{position:absolute;bottom:calc(100% + 3px);left:50%;transform:translateX(-50%) rotate(180deg);writing-mode:vertical-rl;line-height:1;font-size:.64rem;font-weight:700;white-space:nowrap}
 .chart-fill-ready:not(.chart-fill-visible) .labour-bar-value{visibility:hidden}
 @media(prefers-reduced-motion:reduce){.chart-fill-ready:not(.chart-fill-visible) .labour-bar-value{visibility:visible}}
+#monthlyCosts[hidden]{display:none}
+#monthlyCosts{margin:0 0 18px}
+.monthly-cost-heading{display:flex;align-items:baseline;flex-wrap:wrap;gap:4px 10px;margin-bottom:8px}
+.monthly-cost-heading h2{font-size:1rem;margin:0}
+.monthly-cost-heading span,.monthly-cost-heading small{color:#52647b;font-size:.78rem}
+.monthly-cost-grid{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:10px;align-items:start}
+.monthly-cost-card{border:1px solid #152b451a;border-radius:10px;padding:clamp(8px,1.1vw,14px);color:#142844;min-width:0}
+.monthly-cost-labour{background:#e7f1ff}.monthly-cost-area{background:#e4f5f0}.monthly-cost-other{background:#fff2d8}
+.monthly-cost-total{background:#142844;color:#fff}
+.monthly-cost-card h3{font-size:.83rem;margin:0 0 5px}
+.monthly-cost-card strong{display:block;font-size:clamp(.95rem,1.65vw,1.65rem);line-height:1.2;font-variant-numeric:tabular-nums;overflow-wrap:anywhere}
+.monthly-cost-card details{border-top:1px solid currentColor;margin-top:8px;padding-top:4px}
+.monthly-cost-card summary{cursor:pointer;font-size:.76rem;min-height:26px;line-height:26px}
+.monthly-cost-card dl{margin:2px 0 0;font-size:.76rem}
+.monthly-cost-card dl div{display:flex;flex-wrap:wrap;justify-content:space-between;gap:2px 8px;margin-top:4px}
+.monthly-cost-card dd{margin:0;font-weight:700}
+@media(max-width:680px){
+  .monthly-cost-grid{grid-template-columns:repeat(2,minmax(0,1fr));gap:8px}
+  .monthly-cost-card strong{font-size:clamp(.9rem,4.4vw,1.35rem)}
+  .monthly-cost-card summary{min-height:34px;line-height:34px}
+}
 </style>
 <header class="dashboard-header"><div class="job-header-actions"><div class="header-scope"><label><span>Customer</span><select id="customer"></select></label>
 <label><span>Job</span><select id="job"></select></label></div><button id="openCosts" type="button" aria-haspopup="dialog"><svg class="ui-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" aria-hidden="true"><rect x="5" y="3" width="14" height="18" rx="2"/><path d="M8 8h8m-8 4h2m4 0h2m-8 4h2m4 0h2"/></svg>Job Costing</button><p id="payrollSession" role="status"></p><button id="payrollSignIn" type="button">Payroll sign in</button><button id="payrollSignOut" type="button" hidden>Sign out</button></div><div class="dashboard-title"><img class="gtl-header-logo" src="./logo-header.png?v=golden-cost-logo" width="512" height="460" alt="GTL Job Costing"><div><p class="dashboard-brand">Global Transportation and PVT LTD</p><h1>Warehouse Operations &amp; Job Costing</h1><small>Vehicle turnaround, crew hours and job costs</small></div></div>
@@ -675,6 +696,7 @@ button,input,select,textarea,::file-selector-button{font-family:inherit}
 </header>
 <main>
 <p id="range" class="muted" aria-live="polite"></p>
+<section id="monthlyCosts" aria-labelledby="monthlyCostsHeading" hidden></section>
 <section id="cards" class="cards" aria-label="Operations summary"></section>
 <section class="chart-grid" id="charts" aria-label="Operations charts"></section>
 <section class="panel" id="movementUploadPanel"><div class="movement-upload-row"><label id="movementUploadLabel" hidden>Upload Movement Report (.xlsx)<input id="movementUpload" type="file" accept=".xlsx"></label><span>Last movement upload · Sri Lanka <strong id="movementLastUpload">Loading…</strong></span></div><p id="movementStatus" role="status"></p></section>
@@ -949,6 +971,7 @@ function render(animate=true) {
     renderedVisit=null;
   }
   previousCardsMarkup=cardsMarkup;
+  renderMonthlyCosts(selected);
   for(const d of directions)renderVisitCost(selected,rows.filter(o=>o.direction===d),d);
   fitKpiValues();
   if(animate)animateCostCards(JSON.stringify([el('customer').value,el('job').value,from,to,direction,kind,selected?.id]));
@@ -1130,14 +1153,14 @@ function showsMonthlyCharges(visit){
   const {date,periodEnd}=monthBounds(month);
   return from===date&&to===periodEnd;
 }
-function operationCosts(visit,rows,direction,vehicleOnly=false){
+function operationCosts(visit,rows,direction,vehicleOnly=false,allVehicleTypes=false){
   const matched=rows.map(operationPublication).filter(Boolean);
   const shared=matched.length>0;
   const labour=matched.reduce((n,entry)=>n+entry.amount,0);
   const jobCosts=dashboardJobCosts();
   const rate=direction==='L'?jobCosts.load:jobCosts.unload;
   const areaCost=knownAmount(rate)?rows.reduce((n,row)=>n+estimatedArea(row.cbm)*rate,0):0;
-  const dated=datedCharges(rows,direction,visit,jobCosts).filter(entry=>!vehicleOnly||rows.some(row=>row.id===entry.entry.vehicle));
+  const dated=datedCharges(rows,direction,visit,jobCosts,allVehicleTypes).filter(entry=>!vehicleOnly||rows.some(row=>row.id===entry.entry.vehicle));
   const categoryCosts=chargeCategories.map(([key,label])=>{
     const undatedMonthly=showsMonthlyCharges(visit)&&!vehicleOnly?categoryEntries(key,jobCosts).filter(entry=>!entry.date)
       .reduce((total,entry)=>total+(chargeTotal(entry,direction)??0),0):0;
@@ -1146,6 +1169,60 @@ function operationCosts(visit,rows,direction,vehicleOnly=false){
   const operatingCost=categoryCosts.reduce((total,category)=>total+category.amount,0);
   const complete=rows.length>0&&matched.length===rows.length&&matched.every(entry=>entry.complete)&&knownAmount(rate);
   return {matched,shared,labour,rate,areaCost,dated,categoryCosts,operatingCost,complete};
+}
+let monthlyCostKey;
+let monthlyCostScope;
+function renderMonthlyCosts(visit){
+  const section=el('monthlyCosts');
+  if(!showsMonthlyCharges(visit)){
+    section.hidden=true;
+    monthlyCostKey=undefined;
+    return;
+  }
+  const month=el('monthFilter').value;
+  const rows=activeOperations().filter(row=>row.start.slice(0,7)===month);
+  const [loading,unloading]=['L','U'].map(direction=>
+    operationCosts(null,rows.filter(row=>row.direction===direction),direction,false,true));
+  const total=cost=>cost.labour+cost.areaCost+cost.operatingCost;
+  const figures=[
+    ['labour','Labour Cost',loading.labour,unloading.labour],
+    ['area','Area Cost',loading.areaCost,unloading.areaCost],
+    ['other','Other Costs',loading.operatingCost,unloading.operatingCost],
+    ['total','Total Monthly Cost',total(loading),total(unloading)]
+  ];
+  const scope=JSON.stringify([el('customer').value,el('job').value,month]);
+  const partial=['L','U'].some((direction,index)=>
+    rows.some(row=>row.direction===direction)&&![loading,unloading][index].complete);
+  const key=JSON.stringify([scope,figures,partial]);
+  section.hidden=false;
+  if(key===monthlyCostKey)return;
+  const expanded=new Set(scope===monthlyCostScope
+    ?[...section.querySelectorAll('details[open]')].map(detail=>detail.dataset.costKind):[]);
+  monthlyCostKey=key;
+  monthlyCostScope=scope;
+  const period=new Intl.DateTimeFormat('en-LK',{month:'long',year:'numeric',timeZone:'UTC'}).format(new Date(month+'-01T00:00:00Z'));
+  section.innerHTML=`<div class="monthly-cost-heading"><h2 id="monthlyCostsHeading">Monthly Cost Summary</h2>
+    <span>${period}</span>${partial?'<small>Known costs only · some labour or area costs are incomplete</small>':''}</div>
+    <div class="monthly-cost-grid">${figures.map(([kind,label,l,u])=>`
+      <article class="monthly-cost-card monthly-cost-${kind}">
+        <h3>${label}</h3><strong data-monthly-amount="${l+u}">${money(l+u)}</strong>
+        <details data-cost-kind="${kind}"${expanded.has(kind)?' open':''}>
+          <summary>Breakdown</summary>
+          <dl><div><dt>Loading</dt><dd>${money(l)}</dd></div>
+              <div><dt>Unloading</dt><dd>${money(u)}</dd></div></dl>
+        </details>
+      </article>`).join('')}</div>`;
+  if(matchMedia('(prefers-reduced-motion: reduce)').matches)return;
+  const amounts=[...section.querySelectorAll('[data-monthly-amount]')];
+  for(const amount of amounts)amount.textContent=money(0);
+  const start=performance.now();
+  function count(now){
+    if(section.hidden||key!==monthlyCostKey||!amounts[0].isConnected)return;
+    const progress=Math.min(1,Math.max(0,(now-start)/300));
+    for(const amount of amounts)amount.textContent=money(Number(amount.dataset.monthlyAmount)*progress);
+    if(progress<1)requestAnimationFrame(count);
+  }
+  requestAnimationFrame(count);
 }
 function renderAverageTimeCharts(rows,selected){
   const groups=['L','U'].map(direction=>{
@@ -2189,9 +2266,9 @@ function chargeTotal(entry,direction){
   if(!knownAmount(entry[direction]))return null;
   return entry[direction]*(entry.date?entry.quantity:1);
 }
-function datedCharges(rows,direction,visit,settings=costSettings){
+function datedCharges(rows,direction,visit,settings=costSettings,allVehicleTypes=false){
   const ids=new Set(rows.map(row=>row.id));
-  const filterType=el('kind').value;
+  const filterType=!allVehicleTypes&&el('kind').value;
   if(!showsMonthlyCharges(visit))return [];
   return chargeCategories.flatMap(([key,label])=>categoryEntries(key,settings)
     .filter(entry=>entry.date&&entry.date>=from&&entry.date<=to&&knownAmount(entry[direction])&&
