@@ -734,6 +734,12 @@ button,input,select,textarea,::file-selector-button{font-family:inherit}
   #charts .vehicle-cost-legend{flex-wrap:wrap}
   .mobile-chart-hint:has(+ #charts:not(:empty)){display:block;margin:12px 0 0;font-size:.72rem;color:#52647b}
 }
+#costSettings #areaCostSection .cost-inputs{grid-template-columns:repeat(3,minmax(0,1fr))}
+#areaMasterPanel,#areaMasterFile{min-width:0}
+#areaMasterFile{width:100%;margin-top:5px}
+#areaMasterStatus{margin:4px 0 0;font-size:.74rem}
+@media(max-width:720px){#costSettings #areaCostSection .cost-inputs{grid-template-columns:repeat(2,minmax(0,1fr))}#areaMasterPanel{grid-column:1/-1}}
+@media(max-width:370px){#costSettings #areaCostSection .cost-inputs{grid-template-columns:1fr}}
 </style>
 <header class="dashboard-header"><div class="job-header-actions"><div class="header-scope"><label><span>Customer</span><select id="customer"></select></label>
 <label><span>Job</span><select id="job"></select></label></div><button id="openCosts" type="button" aria-haspopup="dialog"><svg class="ui-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" aria-hidden="true"><rect x="5" y="3" width="14" height="18" rx="2"/><path d="M8 8h8m-8 4h2m4 0h2m-8 4h2m4 0h2"/></svg>Job Costing</button><p id="payrollSession" role="status"></p><button id="payrollSignIn" type="button">Payroll sign in</button><button id="payrollSignOut" type="button" hidden>Sign out</button></div><div class="dashboard-title"><img class="gtl-header-logo" src="./logo-header.png?v=golden-cost-logo" width="512" height="460" alt="GTL Job Costing"><div><p class="dashboard-brand">Global Transportation and PVT LTD</p><h1>Warehouse Operations &amp; Job Costing</h1><small>Vehicle turnaround, crew hours and job costs</small></div></div>
@@ -755,7 +761,7 @@ button,input,select,textarea,::file-selector-button{font-family:inherit}
 <p class="mobile-chart-hint" id="mobileChartHint">Swipe sideways to see more charts</p>
 <section class="chart-grid" id="charts" aria-label="Operations charts" tabindex="0" aria-describedby="mobileChartHint"></section>
 <section class="panel" id="movementUploadPanel"><div class="movement-upload-row"><label id="movementUploadLabel" hidden>Upload Movement Report (.xlsx)<input id="movementUpload" type="file" accept=".xlsx"></label><span>Last movement upload · Sri Lanka <strong id="movementLastUpload">Loading…</strong></span></div><p id="movementStatus" role="status"></p></section>
-<footer class="muted">Source: uploaded Movement Reports and baseline operations · Operations shown for the selected customer and job. Date filters use operation start dates. Estimated pick and unloading areas use 1.7 CBM per 25 sq ft. The workbook has no unloading location, delay or employee name fields.</footer>
+<footer class="muted">Source: uploaded Movement Reports and baseline operations · Operations shown for the selected customer and job. Date filters use operation start dates. Monthly loading and unloading areas come from the uploaded Area Report. The workbook has no unloading location, delay or employee name fields.</footer>
 <section class="monthly-export" aria-label="Monthly Excel export">
   <button type="button" id="downloadMonthlyExcel" hidden>Download Excel File</button>
   <span id="monthlyExportStatus" role="status"></span>
@@ -785,9 +791,9 @@ button,input,select,textarea,::file-selector-button{font-family:inherit}
 <div class="cost-inputs">
 <section class="rate-box" data-rate="unload"><label>Unloading · LKR / ft²<input name="unload" type="number" min="0" step="any" readonly></label><button type="button" data-edit-rate>Edit</button><button type="button" data-save-rate disabled>Save</button></section>
 <section class="rate-box" data-rate="load"><label>Loading · LKR / ft²<input name="load" type="number" min="0" step="any" readonly></label><button type="button" data-edit-rate>Edit</button><button type="button" data-save-rate disabled>Save</button></section>
-<div id="areaMasterPanel" class="rate-box" hidden>
-<label>Area Report (.xlsx)<input id="areaMasterFile" type="file" accept=".xlsx"></label>
-<p id="areaMasterStatus" role="status"></p>
+<div id="areaMasterPanel" class="rate-box">
+<label>Area Report (.xlsx)<input id="areaMasterFile" type="file" accept=".xlsx" disabled></label>
+<p id="areaMasterStatus" role="status">Sign in as payroll admin to upload.</p>
 </div>
 </div>
 </section>
@@ -935,7 +941,6 @@ updateWeeks();
 const sum = (rows,key) => rows.reduce((total,row)=>total+row[key],0);
 const metricIcons = {'truck':'<svg class="ui-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 6h11v11H3zM14 10h4l3 3v4h-7"/><circle cx="7" cy="18" r="2"/><circle cx="17" cy="18" r="2"/></svg>','clock':'<svg class="ui-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 2"/></svg>','volume':'<svg class="ui-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m12 3 8 4v10l-8 4-8-4V7zm-8 4 8 4 8-4m-8 4v10"/></svg>','area':'<svg class="ui-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 4h16v16H4zM4 9h4m-4 5h4m4 6v-4m5 4v-4"/></svg>'};
 const card = (label,value,note,icon,direction) => `<article class="card ${direction==='L'?'loading':'unloading'} ${icon}"><span>${metricIcons[icon]}${label}</span><strong>${value}</strong><small>${note}</small></article>`;
-const estimatedArea = cbm => cbm/1.7*25;
 const visitLabel = o => {
   if(o.direction==='L')return `${o.vehicle} · Tally ${o.cargo[0].tally}`;
   const firstDocument=o.cargo[0].document;
@@ -1036,7 +1041,7 @@ el('areaMasterFile').addEventListener('change',async event=>{
     render(false);
     status.textContent='Area Report saved on this browser. '+Object.keys(imported).length+' monthly row(s) imported.';
   }catch(error){status.textContent=error.message;}
-  finally{input.value='';input.disabled=false;}
+  finally{input.value='';input.disabled=!canManagePayroll();}
 });
 function render(animate=true) {
   el('rangeText').textContent=from&&to?`${from} – ${to}`:'All dates';
@@ -1082,7 +1087,7 @@ function render(animate=true) {
 
       ]),
       ...(sqft!==null?[card(d==='U'?'Unloading Area':'Loading Pick Area',fmt(sqft,2)+' sq ft','Monthly Area Report','area',d)]:
-        d==='U'&&cbm>0?[card('Estimated Unloading Area',fmt(estimatedArea(cbm),2)+' sq ft','1.7 CBM = 25 sq ft','area',d)]:[]),
+        []),
     ];
     const theme=d==='U'?'unloading':'loading';
     const vehicleCounts=[...new Set(items.map(item=>item.kind))].map(kind=>[kind,items.filter(o=>o.kind===kind).length]).filter(([,count])=>count>0);
@@ -1304,7 +1309,8 @@ function operationCosts(visit,rows,direction,vehicleOnly=false,allVehicleTypes=f
   const labour=matched.reduce((n,entry)=>n+entry.amount,0);
   const jobCosts=dashboardJobCosts();
   const rate=direction==='L'?jobCosts.load:jobCosts.unload;
-  const areaCost=knownAmount(rate)?rows.reduce((n,row)=>n+estimatedArea(row.cbm)*rate,0):0;
+  const sqft=vehicleOnly||(!allVehicleTypes&&el('kind').value)?null:monthlyAreaSqft(direction,visit);
+  const areaCost=sqft!==null&&knownAmount(rate)?sqft*rate:0;
   const dated=datedCharges(rows,direction,visit,jobCosts,allVehicleTypes).filter(entry=>!vehicleOnly||rows.some(row=>row.id===entry.entry.vehicle));
   const categoryCosts=chargeCategories.map(([key,label])=>{
     const undatedMonthly=showsMonthlyCharges(visit)&&!vehicleOnly?categoryEntries(key,jobCosts).filter(entry=>!entry.date)
@@ -1313,7 +1319,7 @@ function operationCosts(visit,rows,direction,vehicleOnly=false,allVehicleTypes=f
   });
   const operatingCost=categoryCosts.reduce((total,category)=>total+category.amount,0);
   const complete=rows.length>0&&matched.length===rows.length&&matched.every(entry=>entry.complete)&&knownAmount(rate);
-  return {matched,shared,labour,rate,areaCost,dated,categoryCosts,operatingCost,complete};
+  return {matched,shared,labour,rate,sqft,areaCost,dated,categoryCosts,operatingCost,complete};
 }
 function monthlyCostReport(){
   const month=el('monthFilter').value;
@@ -1380,19 +1386,18 @@ function monthlyExcelSheets(report,customer,job,crews,publications){
   const summary=[['Month',report.month],['Customer',customer],['Job',job],[],
     ['Cost','Loading (LKR)','Unloading (LKR)','Both U/L (LKR)','Total (LKR)'],
     ...report.figures.map(([,label,l,u,both=0])=>[label,l,u,both,l+u+both]),[],
-    ['Reconciliation','Monthly total = vehicle labour + vehicle area + Other Charges.'],
+    ['Reconciliation','Monthly total = vehicle labour + Monthly Area + Other Charges.'],
     ['Crew detail','Published labour costs are per role and vehicle. EPFs identify crew and do not represent individual cost allocations.'],
     ['Coverage','Blank labour costs indicate missing published data. Amounts use the dashboard calculation precision.']];
-  const vehicles=[['Operation ID','Operation','Vehicle','Vehicle Type','Start','End','Day Hours','OT Hours','Total Hours','Published Labour LKR','Area LKR','Labour Coverage']];
+  const vehicles=[['Operation ID','Operation','Vehicle','Vehicle Type','Start','End','Day Hours','OT Hours','Total Hours','Published Labour LKR','Labour Coverage']];
   const labour=[['Operation ID','Operation','Vehicle','Vehicle Type','Role','EPF Numbers','Published Day Labour Hours','Published OT Labour Hours','Day Labour LKR','OT Labour LKR','Role Labour LKR']];
   const charges=[['Category','Item','Operation','Date','Period End','Quantity','Vehicle','Amount LKR']];
   for(const row of report.rows){
     const publication=publications.get(row.id);
     const time=splitWorkingMinutes(row.start,row.end);
-    const rate=(row.direction==='L'?report.loading:report.unloading).rate;
     const common=[String(row.id),operationName(row.direction),row.vehicle,row.kind];
     vehicles.push([...common,row.start,row.end,time?time.day/60:null,time?time.ot/60:null,time?(time.day+time.ot)/60:null,
-      publication?.amount??null,knownAmount(rate)?estimatedArea(row.cbm)*rate:0,publication?(publication.complete?'Complete':'Partial'):'Not published']);
+      publication?.amount??null,publication?(publication.complete?'Complete':'Partial'):'Not published']);
     const crew=row.crewPrivate?crews.get(String(row.id)):row;
     for(const [role,field] of crewRoles){
       const ids=[...new Set((crew?.[field]??[]).map(payrollEpf).filter(id=>id&&id!=='0'))];
@@ -1405,7 +1410,9 @@ function monthlyExcelSheets(report,customer,job,crews,publications){
   for(const {label,entry,direction,amount} of report.charges){
     charges.push([label,entry.item??'',direction==='UL'?'Both (U/L)':operationName(direction),entry.date??'',entry.periodEnd??'',entry.quantity??1,entry.vehicle??'',amount]);
   }
-  return [['Summary',summary],['Vehicles',vehicles],['Labour and EPF',labour],['Other Charges',charges]];
+  const monthlyArea=[['Operation','Uploaded Area (sq ft)','Rate (LKR / sq ft)','Area Cost (LKR)'],
+    ...[['Loading',report.loading],['Unloading',report.unloading]].map(([label,cost])=>[label,cost.sqft,cost.rate??null,cost.areaCost])];
+  return [['Summary',summary],['Vehicles',vehicles],['Labour and EPF',labour],['Monthly Area',monthlyArea],['Other Charges',charges]];
 }
 async function buildMonthlyExcel(sheets){
   const zip=new JSZip();
@@ -1603,7 +1610,7 @@ function renderVehicleCostCharts(rows,selected){
     const filtered=rows.filter(row=>row.direction===direction);
     if(el('direction').value&&el('direction').value!==direction)return [];
     const totals=operationCosts(selected,filtered,direction);
-    if(!filtered.length&&!totals.operatingCost)return [];
+    if(!filtered.length&&!totals.operatingCost&&totals.sqft===null)return [];
     const order=['LRY','20GP','40HC'];
     const kinds=[...new Set(filtered.map(row=>row.kind))];
     const items=[...order.filter(kind=>kinds.includes(kind)),...kinds.filter(kind=>!order.includes(kind)).sort()].map(kind=>{
@@ -1949,7 +1956,8 @@ function setPayrollSession(user){
   el('payrollSignOut').hidden=!user;
   const email=user?.email?.trim().toLowerCase();
   const canUpload=email===payrollAdminEmail;
-  el('areaMasterPanel').hidden=!canUpload;
+  el('areaMasterFile').disabled=!canUpload;
+  el('areaMasterStatus').textContent=canUpload?'Choose the monthly Area Report workbook.':'Sign in as payroll admin to upload.';
   el('downloadMonthlyExcel').hidden=!canUpload;
   el('payrollUploadLabel').hidden=!canUpload;
   el('addPay').hidden=!canUpload;
