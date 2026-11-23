@@ -1031,6 +1031,10 @@ function showAreaUploadTime(uploadedAt){
   }).format(new Date(uploadedAt));
   el('areaMasterLastUpload').textContent='Last upload · '+stamp+' (Sri Lanka)';
 }
+function displayedMonthlyArea(direction,visit){
+  if(el('job').value&&customerJobs().length>1)return null;
+  return monthlyAreaSqft(direction,visit);
+}
 function monthlyAreaSqft(direction,visit,jobs=scopedJobs()){
   if(!showsMonthlyCharges(visit))return null;
   const values=jobs.map(job=>monthlyAreas[areaScope(el('customer').value,job,el('monthFilter').value)]?.[direction]).filter(knownAmount);
@@ -1109,14 +1113,14 @@ function render(animate=true) {
   el('vehicle').value=selected?selected.id:'';
   const rows=(selected?[selected]:context).sort((a,b)=>b.direction.localeCompare(a.direction)||b.start.localeCompare(a.start));
   el('container').textContent=selected?.container || '';
-  const directions=(selected?[selected.direction]:direction?[direction]:['U','L']).filter(d=>rows.some(o=>o.direction===d)||monthlyAreaSqft(d,selected)!==null||operationCosts(selected,[],d).operatingCost>0);
+  const directions=(selected?[selected.direction]:direction?[direction]:['U','L']).filter(d=>rows.some(o=>o.direction===d)||displayedMonthlyArea(d,selected)!==null||operationCosts(selected,[],d).operatingCost>0);
   el('range').textContent=invalid?'From date must be on or before To date.':'';
   el('range').hidden=!invalid;
   const cardsMarkup=directions.map(d=>{
     const items=rows.filter(o=>o.direction===d);
     const label=operationName(d);
     const cbm=sum(items,'cbm');
-    const sqft=monthlyAreaSqft(d,selected);
+    const sqft=displayedMonthlyArea(d,selected);
     const metrics=[
       ...(items.length?[card(label+' Operations',items.length,`${new Set(items.flatMap(o=>o.cargo.map(c=>c.document))).size} ${d==='U'?'GRN':'GDN'} documents`,'truck',d)]:[]),
       ...(!selected&&average(items)>0?[card('Average '+label+' Time',items.length?duration(average(items)):'—',duration(sum(items,'minutes'))+' total elapsed','clock',d)]:[]),
@@ -1333,7 +1337,8 @@ function changeJob(){
   for(const id of ['direction','kind','vehicle'])el(id).value='';
   costSettings=readCosts();
   payrollMaster.clear();
-  void refreshSharedPayroll();
+  loadedPayrollMonth='';
+  payrollReadVersion++;
   refreshCostWeeks(false);
   render();
 }
