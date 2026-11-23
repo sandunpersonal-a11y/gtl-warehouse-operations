@@ -793,6 +793,7 @@ button,input,select,textarea,::file-selector-button{font-family:inherit}
 <section class="rate-box" data-rate="load"><label>Loading · LKR / ft²<input name="load" type="number" min="0" step="any" readonly></label><button type="button" data-edit-rate>Edit</button><button type="button" data-save-rate disabled>Save</button></section>
 <div id="areaMasterPanel" class="rate-box">
 <label>Area Report (.xlsx)<input id="areaMasterFile" type="file" accept=".xlsx" disabled></label>
+<p id="areaMasterLastUpload" class="muted">Last upload date and time unavailable</p>
 <p id="areaMasterStatus" role="status">Sign in as payroll admin to upload.</p>
 </div>
 </div>
@@ -988,11 +989,36 @@ const initialPeriod=monthBounds(el('monthFilter').value);
 let from=initialPeriod.date,to=initialPeriod.periodEnd;
 let previousCardsMarkup;
 let renderedVisit;
-const areaMasterKey='gtl-area-report-v1';
 const areaCustomer=value=>String(value??'').replace(/\s+/g,'').toUpperCase();
 const areaScope=(customer,job,month)=>JSON.stringify([areaCustomer(customer),String(job).trim(),month]);
-let monthlyAreas={};
-try{monthlyAreas=JSON.parse(localStorage.getItem(areaMasterKey))??{};}catch{}
+const monthlyAreas=Object.create(null);
+let lastAreaUpload='';
+function applySharedAreas(rows){
+  for(const row of rows){
+    const key=areaScope(row.customer,row.job,row.month);
+    if(monthlyAreas[key]?.uploaded_at>row.uploaded_at)continue;
+    monthlyAreas[key]=row;
+    if(row.uploaded_at>lastAreaUpload)lastAreaUpload=row.uploaded_at;
+  }
+  if(lastAreaUpload)showAreaUploadTime(lastAreaUpload);
+}
+async function refreshSharedAreas(){
+  try{
+    const {data,error}=await publishedCostsClient.rpc('gtl_public_area_report');
+    if(error)throw error;
+    applySharedAreas(data??[]);
+    render(false);
+  }catch(error){
+    console.warn('Area Report could not load:',error.message);
+    if(!lastAreaUpload)el('areaMasterLastUpload').textContent='Shared Area Report unavailable';
+  }
+}
+function showAreaUploadTime(uploadedAt){
+  const stamp=new Intl.DateTimeFormat('en-LK',{
+    timeZone:'Asia/Colombo',dateStyle:'medium',timeStyle:'short'
+  }).format(new Date(uploadedAt));
+  el('areaMasterLastUpload').textContent='Last upload · '+stamp+' (Sri Lanka)';
+}
 function monthlyAreaSqft(direction,visit){
   if(!showsMonthlyCharges(visit))return null;
   const key=areaScope(el('customer').value,el('job').value,el('monthFilter').value);
@@ -1035,11 +1061,15 @@ el('areaMasterFile').addEventListener('change',async event=>{
   try{
     const imported=parseAreaReport(await readPayrollWorkbook(file,null,true));
     if(payrollUser?.id!==account||!canManagePayroll())return;
-    const next={...monthlyAreas,...imported};
-    localStorage.setItem(areaMasterKey,JSON.stringify(next));
-    monthlyAreas=next;
+    const rows=Object.entries(imported).map(([key,{L,U}])=>{
+      const [customer,job,month]=JSON.parse(key);
+      return {customer,job,month,L,U};
+    });
+    const {data,error}=await payrollClient.rpc('gtl_publish_area_report',{p_rows:rows});
+    if(error)throw error;
+    applySharedAreas(data??[]);
     render(false);
-    status.textContent='Area Report saved on this browser. '+Object.keys(imported).length+' monthly row(s) imported.';
+    status.textContent='Area Report published. '+rows.length+' monthly row(s) saved.';
   }catch(error){status.textContent=error.message;}
   finally{input.value='';input.disabled=!canManagePayroll();}
 });
@@ -2866,6 +2896,7 @@ if(payrollClient){
   void refreshMovementOperations();
   void refreshPublishedLabour();
   void refreshPublishedJobCosts();
+  void refreshSharedAreas();
   payrollClient.auth.onAuthStateChange((event,session)=>{
     if(['INITIAL_SESSION','SIGNED_IN','SIGNED_OUT'].includes(event))
       setTimeout(()=>setPayrollSession(session?.user??null),0);
