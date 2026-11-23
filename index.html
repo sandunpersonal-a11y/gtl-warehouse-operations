@@ -1031,8 +1031,11 @@ function showAreaUploadTime(uploadedAt){
   }).format(new Date(uploadedAt));
   el('areaMasterLastUpload').textContent='Last upload · '+stamp+' (Sri Lanka)';
 }
+function showAreaForJobScope(){
+  return !el('job').value||customerJobs().length===1;
+}
 function displayedMonthlyArea(direction,visit){
-  if(el('job').value&&customerJobs().length>1)return null;
+  if(!showAreaForJobScope())return null;
   return monthlyAreaSqft(direction,visit);
 }
 function monthlyAreaSqft(direction,visit,jobs=scopedJobs()){
@@ -1369,7 +1372,7 @@ function jobOperationCosts(job,visit,rows,direction,vehicleOnly,allVehicleTypes)
   const labour=matched.reduce((n,entry)=>n+entry.amount,0);
   const jobCosts=dashboardJobCosts(job);
   const rate=direction==='L'?jobCosts.load:jobCosts.unload;
-  const sqft=vehicleOnly||(!allVehicleTypes&&el('kind').value)?null:monthlyAreaSqft(direction,visit,[job]);
+  const sqft=!showAreaForJobScope()||vehicleOnly||(!allVehicleTypes&&el('kind').value)?null:monthlyAreaSqft(direction,visit,[job]);
   const areaCost=sqft!==null&&knownAmount(rate)?sqft*rate:0;
   const dated=datedCharges(rows,direction,visit,jobCosts,allVehicleTypes).filter(entry=>!vehicleOnly||rows.some(row=>row.id===entry.entry.vehicle));
   const categoryCosts=chargeCategories.map(([key,label])=>{
@@ -1397,7 +1400,7 @@ function monthlyCostReport(){
   const shared=sharedCharges.reduce((sum,charge)=>sum+charge.amount,0);
   const figures=[
     ['labour','Labour Cost',loading.labour,unloading.labour],
-    ['area','Area Cost',loading.areaCost,unloading.areaCost],
+    ...(showAreaForJobScope()?[['area','Area Cost',loading.areaCost,unloading.areaCost]]:[]),
     ['other','Other Costs',loading.operatingCost,unloading.operatingCost,shared],
     ['total','Total Monthly Cost',total(loading),total(unloading),shared]
   ];
@@ -1445,7 +1448,7 @@ function monthlyExcelSheets(report,customer,job,crews,publications){
   const summary=[['Month',report.month],['Customer',customer],['Job',job],[],
     ['Cost','Loading (LKR)','Unloading (LKR)','Both U/L (LKR)','Total (LKR)'],
     ...report.figures.map(([,label,l,u,both=0])=>[label,l,u,both,l+u+both]),[],
-    ['Reconciliation','Monthly total = vehicle labour + Monthly Area + Other Charges.'],
+    ['Reconciliation','Monthly total = vehicle labour + applicable Monthly Area + Other Charges.'],
     ['Crew detail','Published labour costs are per role and vehicle. EPFs identify crew and do not represent individual cost allocations.'],
     ['Coverage','Blank labour costs indicate missing published data. Amounts use the dashboard calculation precision.']];
   const vehicles=[['Operation ID','Operation','Vehicle','Vehicle Type','Job','Start','End','Day Hours','OT Hours','Total Hours','Published Labour LKR','Labour Coverage']];
@@ -1471,7 +1474,7 @@ function monthlyExcelSheets(report,customer,job,crews,publications){
   }
   const monthlyArea=[['Operation','Uploaded Area (sq ft)','Rate (LKR / sq ft)','Area Cost (LKR)'],
     ...[['Loading',report.loading],['Unloading',report.unloading]].map(([label,cost])=>[label,cost.sqft,cost.rate??null,cost.areaCost])];
-  return [['Summary',summary],['Vehicles',vehicles],['Labour and EPF',labour],['Monthly Area',monthlyArea],['Other Charges',charges]];
+  return [['Summary',summary],['Vehicles',vehicles],['Labour and EPF',labour],...(report.figures.some(([kind])=>kind==='area')?[['Monthly Area',monthlyArea]]:[]),['Other Charges',charges]];
 }
 async function buildMonthlyExcel(sheets){
   const zip=new JSZip();
@@ -1651,6 +1654,7 @@ function renderOtherCostChart(label,totals,monthly){
   const amounts=[totals.areaCost,...totals.categoryCosts.map(category=>category.amount)];
   const peak=Math.max(1,...amounts);
   const bars=otherCostSeries.map(({label,color},index)=>{
+    if(index===0&&!showAreaForJobScope())return '';
     const value=amounts[index];
     const description=label+' · '+money(value);
     return `<div class="category-cost-row" title="${esc(description)}">
