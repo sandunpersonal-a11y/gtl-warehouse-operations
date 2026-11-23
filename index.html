@@ -741,7 +741,7 @@ button,input,select,textarea,::file-selector-button{font-family:inherit}
 @media(max-width:720px){#costSettings #areaCostSection .cost-inputs{grid-template-columns:repeat(2,minmax(0,1fr))}#areaMasterPanel{grid-column:1/-1}}
 @media(max-width:370px){#costSettings #areaCostSection .cost-inputs{grid-template-columns:1fr}}
 #job{font-size:.82rem}
-.costing-report-links{display:grid;gap:4px}.costing-report-links #openCosts,.costing-report-links a{width:100%;margin:0;justify-content:center}.costing-report-links a{display:flex;background:#eaf3fc;color:#153653;border:1px solid #b4cdde;border-radius:6px;padding:4px 7px;text-decoration:none;font-size:.76rem;font-weight:700}
+.costing-report-links{display:grid;gap:4px;flex:none}.costing-report-links #openCosts,.costing-report-links a{width:100%;margin:0;justify-content:center}.costing-report-links a{display:flex;background:#eaf3fc;color:#153653;border:1px solid #b4cdde;border-radius:6px;padding:4px 7px;text-decoration:none;font-size:.76rem;font-weight:700}
 </style>
 <header class="dashboard-header"><div class="job-header-actions"><div class="header-scope"><label><span>Customer</span><select id="customer"></select></label>
 <label><span>Job</span><select id="job"></select></label></div><div class="costing-report-links"><button id="openCosts" type="button" aria-haspopup="dialog"><svg class="ui-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" aria-hidden="true"><rect x="5" y="3" width="14" height="18" rx="2"/><path d="M8 8h8m-8 4h2m4 0h2m-8 4h2m4 0h2"/></svg>Job Costing</button><a href="./labour-report.html">Labour Report</a></div><p id="payrollSession" role="status"></p><button id="payrollSignIn" type="button">Payroll sign in</button><button id="payrollSignOut" type="button" hidden>Sign out</button></div><div class="dashboard-title"><img class="gtl-header-logo" src="./logo-header.png?v=golden-cost-logo" width="512" height="460" alt="GTL Job Costing"><div><p class="dashboard-brand">Global Transportation and PVT LTD</p><h1>Warehouse Operations &amp; Job Costing</h1><small>Vehicle turnaround, crew hours and job costs</small></div></div>
@@ -926,8 +926,7 @@ function updateJobs(){
 }
 function updateJobCostingAccess(){
   const button=el('openCosts');
-  button.disabled=!el('job').value;
-  button.title=button.disabled?'Select a specific job to open Job Costing':'';
+  button.title=!el('job').value?'Select a specific job to open Job Costing':'';
 }
 el('customer').innerHTML=optionList(customers);
 el('customer').value=customers[0]??'';
@@ -1803,6 +1802,12 @@ function setEditing(box,fields,editing,editButton,saveButton){
   if(editing)fields[0].focus();
 }
 el('openCosts').addEventListener('click',()=>{
+  const job=el('job');
+  if(!job.value){
+    window.alert('Select a specific job from the Job list to open Job Costing.');
+    job.focus();
+    return;
+  }
   el('payrollPin').value='';
   el('pinMessage').textContent='';
   el('payrollLock').showModal();
