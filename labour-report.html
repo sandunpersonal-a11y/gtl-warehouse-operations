@@ -1,0 +1,26 @@
+<!doctype html>
+<html lang="en"><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Labour Productivity Report · GTL</title>
+<style>
+*{box-sizing:border-box}body{margin:0;background:#f2f6fa;color:#142844;font:15px system-ui,sans-serif}header{background:#142844;color:white;padding:20px max(16px,4vw);display:flex;justify-content:space-between;align-items:center;gap:12px}h1{margin:0;font-size:clamp(1.25rem,3vw,1.9rem)}header a{color:white}main{padding:18px max(12px,4vw)}section{background:white;border:1px solid #d6e1ed;border-radius:10px;margin-bottom:14px;padding:14px}h2{font-size:1rem;margin:0 0 10px}.filters,.metrics{display:flex;flex-wrap:wrap;gap:12px}.filters label{display:grid;gap:4px;flex:1 1 150px;font-weight:650}input,select,button{font:inherit;padding:7px 9px;border:1px solid #a4b6cd;border-radius:6px;background:white;color:#142844}button{cursor:pointer;background:#174d83;color:white}button:disabled{opacity:.45;cursor:default}.metrics>div{flex:1 1 150px;background:#edf4fc;padding:10px;border-radius:6px}.metrics strong{display:block;font-size:1.2rem}.scroll{overflow:auto;max-height:65vh}table{border-collapse:collapse;width:100%;font-variant-numeric:tabular-nums;white-space:nowrap}th,td{padding:8px 10px;text-align:right;border-bottom:1px solid #e0e8f1}th:first-child,td:first-child,th:nth-child(2),td:nth-child(2){text-align:left}thead{position:sticky;top:0;background:#184c82;color:white}tfoot{background:#eaf1fb;font-weight:750}.day{color:#14633c}.ot{color:#964509}.chart-row{display:grid;grid-template-columns:minmax(64px,auto) minmax(80px,1fr) minmax(60px,auto);gap:8px;align-items:center;margin:7px 0}.track{display:flex;background:#edf2f7;height:12px;border-radius:4px;overflow:hidden}.worked{background:#21774b}.idle{background:#6985a6}small{color:#52647b}footer{display:flex;justify-content:flex-end;margin-top:12px}.report-loading>section:not(.filters){visibility:hidden}[hidden]{display:none!important}
+</style>
+<header><h1>Labour Productivity Report</h1><a href="./index.html">Back to Dashboard</a></header>
+<main>
+<p id="status" role="status">Checking payroll access…</p>
+<div id="report" hidden>
+<section class="filters" aria-label="Report filters">
+<label>Month<input id="month" type="month" value="2026-10"></label>
+<label>Customer<select id="customer"></select></label>
+<label>Job<select id="job"></select></label>
+</section>
+<section id="metrics" class="metrics" aria-label="Report totals"></section>
+<section><h2>Day hours vs idle hours · top 10 by recorded day hours</h2><small><span class="day">■ Recorded day hours</span> · <span style="color:#496786">■ Idle / unallocated hours</span></small><div id="chart"></div></section>
+<section><h2>Employee detail</h2><p><small>Idle hours = monthly paid hours less recorded loading and unloading day hours, minimum zero. OT is separate. Filtered views show time outside that selection as unallocated. Counts are vehicle operations per employee. Costs use the selected month's payroll and recorded operations. Overlapping assignments are counted as logged.</small></p>
+<div class="scroll" tabindex="0" aria-label="Employee detail table"><table><thead id="head"></thead><tbody id="body"></tbody><tfoot id="foot"></tfoot></table></div>
+<footer><button id="download" type="button" disabled>Download Excel</button></footer>
+</section></div>
+</main>
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+<script src="./jszip.min.js"></script>
+<script src="./labour-report.js"></script>
+</html>
