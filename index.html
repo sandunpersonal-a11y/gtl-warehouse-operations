@@ -785,6 +785,10 @@ button,input,select,textarea,::file-selector-button{font-family:inherit}
 <div class="cost-inputs">
 <section class="rate-box" data-rate="unload"><label>Unloading · LKR / ft²<input name="unload" type="number" min="0" step="any" readonly></label><button type="button" data-edit-rate>Edit</button><button type="button" data-save-rate disabled>Save</button></section>
 <section class="rate-box" data-rate="load"><label>Loading · LKR / ft²<input name="load" type="number" min="0" step="any" readonly></label><button type="button" data-edit-rate>Edit</button><button type="button" data-save-rate disabled>Save</button></section>
+<div id="areaMasterPanel" class="rate-box" hidden>
+<label>Area Report (.xlsx)<input id="areaMasterFile" type="file" accept=".xlsx"></label>
+<p id="areaMasterStatus" role="status"></p>
+</div>
 </div>
 </section>
 
@@ -979,6 +983,61 @@ const initialPeriod=monthBounds(el('monthFilter').value);
 let from=initialPeriod.date,to=initialPeriod.periodEnd;
 let previousCardsMarkup;
 let renderedVisit;
+const areaMasterKey='gtl-area-report-v1';
+const areaCustomer=value=>String(value??'').replace(/\s+/g,'').toUpperCase();
+const areaScope=(customer,job,month)=>JSON.stringify([areaCustomer(customer),String(job).trim(),month]);
+let monthlyAreas={};
+try{monthlyAreas=JSON.parse(localStorage.getItem(areaMasterKey))??{};}catch{}
+function monthlyAreaSqft(direction,visit){
+  if(!showsMonthlyCharges(visit))return null;
+  const key=areaScope(el('customer').value,el('job').value,el('monthFilter').value);
+  const value=monthlyAreas[key]?.[direction];
+  return knownAmount(value)?value:null;
+}
+function parseAreaReport(tables){
+  const months='january february march april may june july august september october november december'.split(' ');
+  const headers=['job','customer','year','month','loadingsqft','unloadingsqft'];
+  const result=new Map();
+  for(const {name,rows} of tables){
+    const normalize=value=>String(value??'').toLowerCase().replace(/[^a-z]/g,'');
+    const header=rows.findIndex(row=>headers.every(key=>row.map(normalize).includes(key)));
+    if(header<0)continue;
+    const columns=headers.map(key=>rows[header].map(normalize).indexOf(key));
+    for(let i=header+1;i<rows.length;i++){
+      let [job,customer,year,month,loading,unloading]=columns.map(col=>String(rows[i][col]??'').trim());
+      if(![job,customer,year,month,loading,unloading].some(Boolean))continue;
+      // The supplied template has Customer and Job values reversed on its data row.
+      if(!/^\d+$/.test(job)&&/^\d+$/.test(customer))[job,customer]=[customer,job];
+      const lower=month.toLowerCase();
+      const monthNumber=/^\d{1,2}$/.test(lower)?Number(lower):months.findIndex(value=>value===lower||value.slice(0,3)===lower)+1;
+      const sqft=value=>value===''?null:Number(value.replaceAll(',',''));
+      const L=sqft(loading),U=sqft(unloading);
+      if(!job||!customer||!/^(19|20)\d{2}$/.test(year)||monthNumber<1||monthNumber>12||
+        [L,U].some(value=>value!==null&&!knownAmount(value)))throw new Error(name+' row '+(i+1)+': check job, customer, year, month and sqft.');
+      const scope=areaScope(customer,job,year+'-'+String(monthNumber).padStart(2,'0'));
+      if(result.has(scope))throw new Error(name+' row '+(i+1)+': duplicate customer, job and month.');
+      result.set(scope,{L,U});
+    }
+  }
+  if(!result.size)throw new Error('No Area Report rows found.');
+  return Object.fromEntries(result);
+}
+el('areaMasterFile').addEventListener('change',async event=>{
+  const input=event.currentTarget,file=input.files[0],status=el('areaMasterStatus');
+  if(!file||!canManagePayroll())return;
+  const account=payrollUser.id;
+  input.disabled=true;
+  try{
+    const imported=parseAreaReport(await readPayrollWorkbook(file,null,true));
+    if(payrollUser?.id!==account||!canManagePayroll())return;
+    const next={...monthlyAreas,...imported};
+    localStorage.setItem(areaMasterKey,JSON.stringify(next));
+    monthlyAreas=next;
+    render(false);
+    status.textContent='Area Report saved on this browser. '+Object.keys(imported).length+' monthly row(s) imported.';
+  }catch(error){status.textContent=error.message;}
+  finally{input.value='';input.disabled=false;}
+});
 function render(animate=true) {
   el('rangeText').textContent=from&&to?`${from} – ${to}`:'All dates';
   const direction=el('direction').value;
@@ -1004,23 +1063,26 @@ function render(animate=true) {
   el('vehicle').value=selected?selected.id:'';
   const rows=(selected?[selected]:context).sort((a,b)=>b.direction.localeCompare(a.direction)||b.start.localeCompare(a.start));
   el('container').textContent=selected?.container || '';
-  const directions=(selected?[selected.direction]:direction?[direction]:['U','L']).filter(d=>rows.some(o=>o.direction===d)||operationCosts(selected,[],d).operatingCost>0);
+  const directions=(selected?[selected.direction]:direction?[direction]:['U','L']).filter(d=>rows.some(o=>o.direction===d)||monthlyAreaSqft(d,selected)!==null||operationCosts(selected,[],d).operatingCost>0);
   el('range').textContent=invalid?'From date must be on or before To date.':'';
   el('range').hidden=!invalid;
   const cardsMarkup=directions.map(d=>{
     const items=rows.filter(o=>o.direction===d);
     const label=operationName(d);
     const cbm=sum(items,'cbm');
+    const sqft=monthlyAreaSqft(d,selected);
     const metrics=[
       ...(items.length?[card(label+' Operations',items.length,`${new Set(items.flatMap(o=>o.cargo.map(c=>c.document))).size} ${d==='U'?'GRN':'GDN'} documents`,'truck',d)]:[]),
       ...(!selected&&average(items)>0?[card('Average '+label+' Time',items.length?duration(average(items)):'—',duration(sum(items,'minutes'))+' total elapsed','clock',d)]:[]),
       ...(cbm<=0?[]:d==='U'?[
         card('Unloaded Volume',fmt(cbm,3)+' CBM','Total unloading cargo volume','volume',d),
-        card('Estimated Unloading Area',fmt(estimatedArea(cbm),2)+' sq ft','1.7 CBM = 25 sq ft','area',d),
+
       ]:[
         card('Loading Volume',fmt(cbm,3)+' CBM','Total loaded cargo volume','volume',d),
-        card('Estimated Loading Pick Area',fmt(estimatedArea(cbm),2)+' sq ft','1.7 CBM = 25 sq ft','area',d),
+
       ]),
+      ...(sqft!==null?[card(d==='U'?'Unloading Area':'Loading Pick Area',fmt(sqft,2)+' sq ft','Monthly Area Report','area',d)]:
+        d==='U'&&cbm>0?[card('Estimated Unloading Area',fmt(estimatedArea(cbm),2)+' sq ft','1.7 CBM = 25 sq ft','area',d)]:[]),
     ];
     const theme=d==='U'?'unloading':'loading';
     const vehicleCounts=[...new Set(items.map(item=>item.kind))].map(kind=>[kind,items.filter(o=>o.kind===kind).length]).filter(([,count])=>count>0);
@@ -1887,6 +1949,7 @@ function setPayrollSession(user){
   el('payrollSignOut').hidden=!user;
   const email=user?.email?.trim().toLowerCase();
   const canUpload=email===payrollAdminEmail;
+  el('areaMasterPanel').hidden=!canUpload;
   el('downloadMonthlyExcel').hidden=!canUpload;
   el('payrollUploadLabel').hidden=!canUpload;
   el('addPay').hidden=!canUpload;
@@ -2107,7 +2170,7 @@ function mergePayrollFiles(files){
   }
   return records;
 }
-async function readPayrollWorkbook(file,sheetName){
+async function readPayrollWorkbook(file,sheetName,allSheets=false){
   if(!window.JSZip)throw new Error('Excel reader is unavailable. Check that jszip.min.js was deployed.');
   const zip=await JSZip.loadAsync(await file.arrayBuffer());
   const elements=(root,name)=>Array.from(root.getElementsByTagNameNS('*',name));
@@ -2121,9 +2184,9 @@ async function readPayrollWorkbook(file,sheetName){
   const workbook=await xml('xl/workbook.xml');
   const relations=await xml('xl/_rels/workbook.xml.rels');
   const available=elements(workbook,'sheet');
-  const sheets=sheetName?available.filter(sheet=>sheet.getAttribute('name')===sheetName):available.slice(0,2);
+  const sheets=sheetName?available.filter(sheet=>sheet.getAttribute('name')===sheetName):allSheets?available:available.slice(0,2);
   if(sheetName&&!sheets.length)throw new Error('Missing Excel sheet '+sheetName+'.');
-  if(!sheetName&&sheets.length!==2)throw new Error('Include both payroll tabs as the first two tabs.');
+  if(!sheetName&&!allSheets&&sheets.length!==2)throw new Error('Include both payroll tabs as the first two tabs.');
   const relationshipById=new Map(elements(relations,'Relationship').map(item=>[item.getAttribute('Id'),item]));
   const stringValue=node=>elements(node,'t').filter(text=>text.parentNode.localName!=='rPh').map(text=>text.textContent).join('');
   const strings=zip.file('xl/sharedStrings.xml')?elements(await xml('xl/sharedStrings.xml'),'si').map(stringValue):[];
