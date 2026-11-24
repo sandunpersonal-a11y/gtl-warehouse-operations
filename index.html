@@ -894,11 +894,10 @@ html.staff-entry body::before{content:"";position:fixed;inset:0;pointer-events:n
 #staffWelcome button{background:#087b83;color:#fff;border:1px solid #087b83;border-radius:7px;padding:8px 14px;font-size:13px}
 #payrollLogin .staff-remember{display:flex;align-items:center;gap:6px}
 #payrollLogin .staff-remember input{width:auto;min-height:0;accent-color:#087b83}
-html.guest-dashboard :is(#openCosts,.costing-report-links,#monthlyCosts,#combinedTimeline,#cards,#charts,#mobileChartHint,#movementUploadPanel,.monthly-export){display:none}
-#guestOvertime:not([hidden]){display:grid;grid-template-columns:repeat(auto-fit,minmax(min(100%,210px),1fr));gap:8px}
-#guestOvertime article{background:#fff;border:1px solid #dbe5ef;border-radius:7px;padding:10px 12px}
-#guestOvertime h2{font-size:.85rem;margin:0 0 4px}
-#guestOvertime strong{color:#8a500e}
+html.guest-dashboard :is(#openCosts,.costing-report-links,#monthlyCosts,#combinedTimeline,#movementUploadPanel,.monthly-export){display:none}
+#guestOperations:not([hidden]){display:flex;flex-wrap:wrap;gap:6px;margin-bottom:8px}
+#guestOperations div{background:#fff;border:1px solid #dbe5ef;border-radius:7px;padding:5px 8px;font-size:.76rem}
+.guest-crew-hours td{font-variant-numeric:tabular-nums}
 </style>
 <header class="dashboard-header"><div class="job-header-actions"><div class="header-scope"><label><span>Customer</span><select id="customer"></select></label>
 <label><span>Job</span><select id="job"></select></label></div><div class="costing-report-links"><button id="openCosts" type="button" aria-haspopup="dialog"><svg class="ui-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" aria-hidden="true"><rect x="5" y="3" width="14" height="18" rx="2"/><path d="M8 8h8m-8 4h2m4 0h2m-8 4h2m4 0h2"/></svg>Job Costing</button><a href="./labour-report.html">Labour Report</a></div><p id="payrollSession" role="status"></p><button id="payrollSignIn" type="button">Staff Sign In</button><button id="payrollSignOut" type="button" hidden>Sign out</button></div><div class="dashboard-title"><img class="gtl-header-logo" src="./logo-header.png?v=golden-cost-logo" width="512" height="460" alt="GTL Job Costing"><div><p class="dashboard-brand">Global Transportation and PVT LTD</p><h1>Warehouse Operations &amp; Job Costing</h1><small>Vehicle turnaround, crew hours and job costs</small></div></div>
@@ -914,7 +913,7 @@ html.guest-dashboard :is(#openCosts,.costing-report-links,#monthlyCosts,#combine
 </section>
 </header>
 <main>
-<section id="guestOvertime" hidden aria-label="Overtime summary"></section>
+<section id="guestOperations" hidden aria-label="Operations summary"></section>
 <p id="range" class="muted" aria-live="polite"></p>
 <section id="monthlyCosts" aria-labelledby="monthlyCostsHeading" hidden></section>
 <section id="combinedTimeline" aria-labelledby="combinedHeading" hidden></section>
@@ -1286,14 +1285,23 @@ el('areaMasterFile').addEventListener('change',async event=>{
   }catch(error){status.textContent=error.message;}
   finally{input.value='';input.disabled=!canManagePayroll();}
 });
-function renderGuestOvertime(rows){
-  const cards=['L','U'].map(direction=>{
-    const matches=rows.filter(row=>row.direction===direction);
-    if(!matches.length)return '';
-    const times=matches.map(row=>splitWorkingMinutes(row.start,row.end)).filter(Boolean);
-    return `<article><h2>${operationName(direction)} OT Hours</h2><strong>${times.length?duration(sum(times,'ot')):'—'}</strong></article>`;
-  }).join('');
-  el('guestOvertime').innerHTML=cards||'<p>No operations for the selected filters.</p>';
+function guestCrewHours(rows){
+  const timed=rows.map(row=>({row,time:splitWorkingMinutes(row.start,row.end)})).filter(item=>item.time);
+  return crewRoles.map(([role,field])=>{
+    let day=0,ot=0;
+    for(const {row,time} of timed){
+      const count=new Set((row[field]??[]).map(payrollEpf).filter(id=>id&&id!=='0')).size;
+      day+=time.day*count;
+      ot+=time.ot*count;
+    }
+    return {role,day,ot};
+  });
+}
+function guestCrewTable(rows){
+  const hasTimes=rows.some(row=>splitWorkingMinutes(row.start,row.end));
+  const time=minutes=>hasTimes?duration(minutes):'—';
+  return `<div class="crew-table-wrap"><table class="guest-crew-hours"><thead><tr><th scope="col">Role</th><th scope="col">Day Hours</th><th scope="col">OT Hours</th><th scope="col">Total Hours</th></tr></thead>
+    <tbody>${guestCrewHours(rows).map(({role,day,ot})=>`<tr><th scope="row">${role}</th><td>${time(day)}</td><td>${time(ot)}</td><td>${time(day+ot)}</td></tr>`).join('')}</tbody></table></div>`;
 }
 function render(animate=true) {
   el('rangeText').textContent=from&&to?`${from} – ${to}`:'All dates';
@@ -1322,17 +1330,16 @@ function render(animate=true) {
   el('container').textContent=selected?.container || '';
   const guest=!payrollUser;
   document.documentElement.classList.toggle('guest-dashboard',guest);
-  el('guestOvertime').hidden=!guest;
+  const guestSummary=el('guestOperations');
+  guestSummary.hidden=!guest||!rows.length;
   if(guest){
-    for(const id of ['monthlyCosts','combinedTimeline','cards','charts'])el(id).replaceChildren();
-    monthlyCostKey=undefined;
-    combinedTimelineKey=undefined;
-    previousCardsMarkup='';
-    renderedVisit=null;
-    renderGuestOvertime(rows);
-    return;
+    const timed=rows.filter(row=>Number.isFinite(row.minutes));
+    const labour=guestCrewHours(rows).reduce((total,row)=>total+row.day+row.ot,0);
+    guestSummary.innerHTML=rows.length?`<div>Vehicle Operations <strong>${fmt(rows.length)}</strong></div>
+      <div>Total Vehicle Duration <strong>${timed.length?duration(sum(timed,'minutes')):'—'}</strong></div>
+      <div>Total Labour Hours <strong>${duration(labour)}</strong></div>`:'';
   }
-  const directions=(selected?[selected.direction]:direction?[direction]:['U','L']).filter(d=>rows.some(o=>o.direction===d)||displayedMonthlyArea(d,selected)!==null||operationCosts(selected,[],d).operatingCost>0);
+  const directions=(selected?[selected.direction]:direction?[direction]:['U','L']).filter(d=>rows.some(o=>o.direction===d)||(!guest&&(displayedMonthlyArea(d,selected)!==null||operationCosts(selected,[],d).operatingCost>0)));
   el('range').textContent=invalid?'From date must be on or before To date.':'';
   el('range').hidden=!invalid;
   const cardsMarkup=directions.map(d=>{
@@ -1356,7 +1363,11 @@ function render(animate=true) {
     const theme=d==='U'?'unloading':'loading';
     const vehicleCounts=[...new Set(items.map(item=>item.kind))].map(kind=>[kind,items.filter(o=>o.kind===kind).length]).filter(([,count])=>count>0);
     const counts=`<div class="crew-counts vehicle-counts"><span>Total Vehicles <b>${items.length}</b></span>${vehicleCounts.map(([kind,count])=>`<span>${esc(kind)} <b>${count}</b></span>`).join('')}</div>`;
-    const details=items.length?counts+timelineCard(items,null)+publishedRoleTable(items)+staffing(items):'';
+    const details=items.length?counts+timelineCard(items,guest?selected:null)+(guest?guestCrewTable(items):publishedRoleTable(items))+staffing(items):'';
+    if(guest)return `<div class="operation-pair">
+      <section class="kpi-group ${theme}"><h2>${label} Timeline</h2>${selected?`<button type="button" class="detail-button" data-reg="${esc(selected.id)}">Cargo details</button>`:''}${details}</section>
+      <section class="kpi-group ${theme} operation-cost"><h2>${label} Operations Summary</h2><div class="kpi-row">${metrics.join('')}</div></section>
+    </div>`;
     return `<div class="operation-pair">
       <section class="kpi-group ${theme}"><h2>${label} Timeline</h2>${items.length?'<span class="labour-label">Labour Costing</span>':''}${selected?'<section id="visitCost" class="panel" aria-label="Selected crew costs"></section>':details}</section>
       <section class="kpi-group ${theme} operation-cost"><h2>${label} Costs</h2><div class="kpi-row">${metrics.join('')}</div><div class="timeline-costs" id="cost-${d}"></div></section>
@@ -1369,6 +1380,19 @@ function render(animate=true) {
     renderedVisit=null;
   }
   previousCardsMarkup=cardsMarkup;
+  if(guest){
+    for(const id of ['monthlyCosts','combinedTimeline']){el(id).hidden=true;el(id).replaceChildren();}
+    monthlyCostKey=undefined;
+    combinedTimelineKey=undefined;
+    const charts=el('charts');
+    charts.innerHTML=renderAverageTimeCharts(rows,selected);
+    charts.hidden=!charts.innerHTML;
+    el('mobileChartHint').hidden=charts.hidden;
+    fitKpiValues();
+    return;
+  }
+  el('charts').hidden=false;
+  el('mobileChartHint').hidden=false;
   renderMonthlyCosts(selected);
   renderCombinedTimeline(rows,selected);
   for(const d of directions)renderVisitCost(selected,rows.filter(o=>o.direction===d),d);
@@ -1380,7 +1404,7 @@ function showDetails(reg) {
   const o=activeOperations().find(row=>row.id===reg);
   el('detailBody').innerHTML=`<h2>${operationName(o.direction)} · ${esc(o.vehicle)} · Reg ${o.reg}</h2>
   <p class="muted">${esc(o.container || o.kind)} · ${stamp(o.start)} → ${stamp(o.end)} · ${duration(o.minutes)} · ${o.heads} heads</p>
-  ${crewDetails(o)}
+  ${payrollUser?crewDetails(o):''}
   <h2>Cargo Lines · ${o.cargo.length}</h2><div class="scroll"><table><thead><tr><th>Tally No.</th><th>Reference</th><th>GRN/GDN</th><th>PCS</th><th>CTN</th><th>CBM</th></tr></thead><tbody>${o.cargo.map(c=>`<tr>${[c.tally,c.reference,c.document,fmt(c.pcs),fmt(c.cartons),fmt(c.cbm,3)].map(x=>`<td>${esc(x)}</td>`).join('')}</tr>`).join('')}</tbody></table></div>`;
   el('detail').showModal();
 }
