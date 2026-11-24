@@ -942,6 +942,9 @@ html.guest-dashboard :is(#openCosts,.costing-report-links,#monthlyCosts,#combine
   #staffWelcome{padding:16px}
   #staffWelcomeName{overflow-wrap:anywhere}
 }
+#costScopeSyncStatus{margin:3px 0;color:#c8e4e9;font-size:.75rem}
+#costScopeSyncStatus:empty,#syncSavedCostScope[hidden]{display:none}
+#costSettings #syncSavedCostScope{width:auto;min-height:28px;padding:3px 8px;font-size:.75rem}
 #costSettings .cost-job-filter{display:flex;align-items:center;gap:6px;width:fit-content;max-width:100%;margin:6px 0;color:#fff;font-size:.75rem}
 #costSettings .cost-job-filter select{width:clamp(128px,22vw,225px);max-width:75vw;min-height:30px;padding:4px 6px}
 #costSettings #jobCharges label{width:min(100%,320px)}
@@ -1034,7 +1037,7 @@ html.guest-dashboard :is(#openCosts,.costing-report-links,#monthlyCosts,#combine
 <dialog id="costSettings" aria-labelledby="costTitle">
 <form id="costForm">
 <div class="cost-page-header"><div class="cost-header-top"><div><h2 id="costTitle">Job Costing</h2><p id="jobCostContext" class="job-context"></p></div><button id="cancelCosts" type="button"><span aria-hidden="true">←</span> Back to Dashboard</button></div>
-<label class="cost-job-filter">Job <select id="costJobScope"></select></label><nav id="costSections" aria-label="Cost categories"></nav></div>
+<label class="cost-job-filter">Job <select id="costJobScope"></select></label><button type="button" id="syncSavedCostScope" hidden>Share saved costs</button><p id="costScopeSyncStatus" role="status"></p><nav id="costSections" aria-label="Cost categories"></nav></div>
 <div class="cost-page-body">
 <section id="areaCostSection"><h3>Storage / Area Rates</h3>
 <div class="cost-inputs">
@@ -1626,7 +1629,8 @@ const regularPay=person=>knownAmount(person?.regularPay)?person.regularPay:
 function readCosts(){
   const defaultPayroll=defaultPayrollForJob();
   try {
-    const scoped=localStorage.getItem(costStorageKey());
+    const scoped=localStorage.getItem(costStorageKey())??(!costingJob()
+      ?localStorage.getItem('dsv-job-costing-v2:'+JSON.stringify([el('customer').value,''])):null);
     const legacy=el('customer').value==='DSV'&&costingJob()==='4974'&&scoped===null?localStorage.getItem(legacyCostStorageKey):null;
     const saved=JSON.parse(scoped??legacy);
     if(saved&&Array.isArray(saved.payroll)){
@@ -2156,19 +2160,45 @@ el('costSettings').addEventListener('close',()=>{
   payrollReadVersion++;
   costSettings=readCosts();
 });
+function mergeSavedCostScope(shared,local){
+  const identity=entry=>JSON.stringify([
+    ...['U','L','UL'].map(direction=>chargeRateFor(entry,direction)),
+    entry.date||null,entry.periodEnd||null,entry.vehicle||null,entry.quantity??1
+  ]);
+  const merged={...local,...shared};
+  for(const field of ['load','unload'])merged[field]=shared[field]??local[field];
+  merged.chargeEntries=Object.fromEntries(chargeCategories.map(([key])=>{
+    const localEntries=categoryEntries(key,local);
+    const consumed=new Set();
+    const entries=categoryEntries(key,shared).map(entry=>{
+      const match=localEntries.findIndex((draft,index)=>!consumed.has(index)&&identity(entry)===identity(draft)&&
+        (!entry.item||!draft.item||entry.item===draft.item));
+      if(match<0)return entry;
+      consumed.add(match);
+      const draft=localEntries[match];
+      return {...draft,...Object.fromEntries(Object.entries(entry).filter(([,value])=>value!==null&&value!==''))};
+    });
+    return [key,[...entries,...localEntries.filter((_,index)=>!consumed.has(index))]];
+  }));
+  return merged;
+}
+el('syncSavedCostScope').addEventListener('click',async()=>{
+  if(!canManagePayroll()||!el('costSettings').open)return;
+  const status=el('costScopeSyncStatus');
+  const scope=costStorageKey();
+  const shared=publishedJobCosts.get(jobCostKey(el('customer').value,costingJob()||allJobsCostKey));
+  costSettings=shared?mergeSavedCostScope(shared,readCosts()):readCosts();
+  const saved=await publishJobCosts();
+  if(!saved||scope!==costStorageKey()||!el('costSettings').open)return;
+  loadJobCostScope();
+  status.textContent='Saved costs are available to Management.';
+});
 function loadJobCostScope(){
   costSettings=readCosts();
   const shared=publishedJobCosts.get(jobCostKey(el('customer').value,costingJob()||allJobsCostKey));
-  if(shared){
-    const local=costSettings;
-    const matchingCharge=(entry,candidate)=>['U','L','UL','date','periodEnd','vehicle','quantity']
-      .every(key=>(entry[key]??null)===(candidate[key]??null));
-    costSettings={...local,...shared,chargeEntries:Object.fromEntries(chargeCategories.map(([key])=>[key,
-      (shared.chargeEntries?.[key]??[]).map(entry=>{
-        const draft=canManagePayroll()&&!entry.item?categoryEntries(key,local).find(item=>matchingCharge(entry,item)):null;
-        return draft?{...entry,item:draft.item,unit:draft.unit,notes:draft.notes,month:draft.month,currency:draft.currency,originalRate:draft.originalRate,fx:draft.fx}:entry;
-      })]))};
-  }
+  if(shared)costSettings={...costSettings,...shared};
+  el('syncSavedCostScope').hidden=!canManagePayroll();
+  el('costScopeSyncStatus').textContent='';
   el('publishJobCostControls').hidden=!canEditCosting();
   for(const box of el('costForm').querySelectorAll('[data-rate]')){
     const input=box.querySelector('input');
@@ -2474,7 +2504,7 @@ function applyPublishedJobCosts(data){
 }
 function publishJobCosts(){
   if(!canEditCosting())return;
-  const status=el('publishJobCostsStatus');
+  const status=el('costScopeSyncStatus');
   const customer=el('customer').value,job=costingJob()||allJobsCostKey;
   const costs={
     load:costSettings.load??null,unload:costSettings.unload??null,
@@ -2485,12 +2515,16 @@ function publishJobCosts(){
     }))]))
   };
   status.textContent='Publishing costs for '+customer+' · '+jobCostScopeLabel(job)+'…';
+  const account=payrollUser.id;
   jobCostPublishQueue=jobCostPublishQueue.then(async()=>{
+    if(payrollUser?.id!==account||!canEditCosting())return false;
     const {error}=await payrollClient.rpc('gtl_publish_job_costs',{p_customer:customer,p_job:job,p_costs:costs});
     if(error)throw error;
     await refreshPublishedJobCosts();
-    status.textContent='Job costs published for '+customer+' · '+jobCostScopeLabel(job)+'.';
-  }).catch(error=>{status.textContent='Job costs could not be published: '+error.message;});
+    status.textContent='Shared with Management · '+customer+' · '+jobCostScopeLabel(job)+'.';
+    return true;
+  }).catch(error=>{status.textContent='Saved on this browser. Sharing failed: '+error.message;return false;});
+  return jobCostPublishQueue;
 }
 el('publishJobCosts').addEventListener('click',()=>{
   if(window.confirm('Publish this job’s saved area rates and charge amounts on the public dashboard?'))publishJobCosts();
