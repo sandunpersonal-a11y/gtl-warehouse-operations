@@ -32,7 +32,7 @@
 .card.clock{background:#f1f0fc;border-left-color:#6457ad}.card.volume,.card.area{background:#fff6e8;border-left-color:#a36b22}
 .card .ui-icon{color:#2c5b83}.filter-field button .ui-icon,label .ui-icon{color:#2c6eb9}
 
-:root{background:#edf3f9}header{background:linear-gradient(112deg,#0c223e,#173e60 75%,#145c65);padding-block:24px}
+:root{background:#edf3f9}header{background:linear-gradient(112deg,#102a43,#173e60 75%,#086670);padding-block:24px}
 .filters{grid-template-columns:repeat(auto-fit,minmax(min(100%,170px),1fr));padding:16px;gap:10px;box-shadow:0 4px 16px #18365410}
 .filters label,.filters .filter-field>span{font-size:.87rem}.filters select,.filters button,.filters .locked{min-height:46px}
 .filters select{font-size:.91rem}#dateRange{display:flex;align-items:center;justify-content:center;white-space:nowrap;font-size:.68rem;gap:2px;font-variant-numeric:tabular-nums}#dateRange .ui-icon{width:12px;margin:0}
@@ -326,8 +326,8 @@ button:not(:disabled){box-shadow:inset 0 1px 0 #ffffff8c,0 2px 0 #15395745}
 
 .operation-timeline .time-labels{display:flex;flex-wrap:wrap;gap:4px;margin:0 0 4px}
 .operation-timeline .time-labels span{padding:2px 5px;border-radius:4px;background:#edf2f7}
-.operation-timeline .time-labels .day-chip{background:#d9f1e8;color:#145e51}
-.operation-timeline .time-labels .ot-chip{background:#ffedcf;color:#794817}
+.operation-timeline .time-labels .day-chip{background:#d9f0f1;color:#086670}
+.operation-timeline .time-labels .ot-chip{background:#fff0d7;color:#794817}
 .operation-timeline .time-band{margin:3px 0 0;height:7px}
 .operation-timeline p{margin:4px 0}
 #range[hidden]{display:none}
@@ -480,7 +480,7 @@ html{font-size:clamp(15px,calc(11px + .36vw),20px)}
 #visitCost .crew-table-wrap td{font-weight:400}
 #visitCost .crew-table-wrap td:is(:nth-child(3),:nth-child(5)){font-weight:600}
 @media(max-width:1100px){.operation-cost .kpi-row,.operation-cost .timeline-costs{grid-template-columns:repeat(auto-fit,minmax(min(100%,140px),1fr))}}
-#costSettings .cost-page-header,.payroll-upload-line{background:linear-gradient(112deg,#0c223e,#173e60 75%,#145c65)}
+#costSettings .cost-page-header,.payroll-upload-line{background:linear-gradient(112deg,#102a43,#173e60 75%,#086670)}
 #costSettings #payrollUploadPanel{padding:0 0 4px;margin:4px 0;background:#edf3f9;overflow:hidden}
 .payroll-upload-line{display:flex;flex-wrap:wrap;align-items:end;gap:8px 14px;padding:7px 10px;color:#fff}
 #costSettings .payroll-upload-line label{margin:0;color:#fff;font-size:.75rem}
@@ -563,8 +563,8 @@ html{font-size:clamp(15px,calc(11px + .36vw),20px)}
 .vehicle-cost-chart h2{font-size:.9rem;margin:0}
 .vehicle-cost-legend{display:flex;gap:6px;font-size:.66rem;margin:4px 0 8px}
 .vehicle-cost-legend span{padding:1px 5px;border-radius:4px}
-.vehicle-cost-legend .day-chip{background:#d9f1e8;color:#145e51}
-.vehicle-cost-legend .ot-chip{background:#ffedcf;color:#794817}
+.vehicle-cost-legend .day-chip{background:#d9f0f1;color:#086670}
+.vehicle-cost-legend .ot-chip{background:#fff0d7;color:#794817}
 .vehicle-cost-plot{display:grid;grid-template-columns:max-content minmax(0,1fr);gap:8px;--plot-height:96px}
 .vehicle-cost-axis{height:var(--plot-height);display:flex;flex-direction:column;justify-content:space-between;text-align:right;font-size:.62rem;color:#4a6379}
 .vehicle-cost-bars{display:flex;min-width:0;gap:8px;overflow-x:auto;padding:16px 0 0;margin-top:-16px;background-position:0 16px;background:repeating-linear-gradient(to bottom,#dbe5ee 0 1px,transparent 1px 25%);background-size:100% var(--plot-height);background-repeat:no-repeat;background-position:0 16px}
@@ -574,8 +574,8 @@ html{font-size:clamp(15px,calc(11px + .36vw),20px)}
 .vehicle-cost-stack strong{position:absolute;left:50%;bottom:100%;transform:translateX(-50%);white-space:nowrap;margin-bottom:1px;font-size:.65rem}
 .vehicle-cost-segment{display:block;min-height:2px;border:0;border-radius:0;padding:0;margin:0;width:100%;cursor:help}
 .vehicle-cost-segment:hover,.vehicle-cost-segment:focus-visible{filter:brightness(1.14);outline:1px solid #112741;outline-offset:-1px}
-.cost-shift-day{background:#238168}
-.cost-shift-ot{background:#db9845}
+.cost-shift-day{background:var(--shift-day)}
+.cost-shift-ot{background:var(--shift-ot)}
 .vehicle-cost-marker{min-height:4px;background:#8ba2b3}
 .vehicle-cost-chart .muted{font-size:.65rem;margin:3px 0 0}
 #charts .average-time-chart{min-width:0;padding:9px 12px}
@@ -595,8 +595,8 @@ html{font-size:clamp(15px,calc(11px + .36vw),20px)}
   position:relative;display:flex;align-items:center;justify-content:center;flex:var(--segment-share) 1 0;
   min-height:3px;container-type:size;cursor:help;color:#fff;
 }
-#charts .cost-shift-day{background:#238168}
-#charts .cost-shift-ot{background:#db9845;color:#26323c}
+#charts .cost-shift-day{background:var(--shift-day)}
+#charts .cost-shift-ot{background:var(--shift-ot);color:#26323c}
 #charts .cost-shift-other{background:#6c8197}
 .other-cost-chip{background:#dfe7ee;color:#29435a}
 .segment-value{display:none;font-size:clamp(8px,.85vw,12px);font-weight:700;white-space:nowrap}
@@ -759,7 +759,7 @@ button,input,select,textarea,::file-selector-button{font-family:inherit}
 
 #combinedTimeline[hidden]{display:none}
 #combinedTimeline{width:100%;margin:0 0 10px;background:#fff;border:1px solid #d2e0eb;border-radius:8px;overflow:hidden;color:#142844}
-.combined-heading{background:linear-gradient(112deg,#0c223e,#173e60 75%,#145c65);color:white;padding:6px 10px}
+.combined-heading{background:linear-gradient(112deg,#102a43,#173e60 75%,#086670);color:white;padding:6px 10px}
 .combined-heading h2{margin:0;font-size:.9rem}
 .combined-kpis{display:flex;flex-wrap:wrap;gap:5px;padding:6px 8px}
 .combined-kpis div{display:inline-flex;align-items:baseline;gap:6px;background:#edf4fa;border-radius:4px;padding:4px 7px;font-size:.76rem}
@@ -783,13 +783,13 @@ button,input,select,textarea,::file-selector-button{font-family:inherit}
 .combined-table thead{background:#eaf2f9;color:#25445f}
 .combined-table tbody tr:nth-child(even){background:#f4f8fc}
 .combined-table td small{display:block;font-size:.68rem}
-.combined-table tbody td:nth-child(3){color:#12634f}
-.combined-table tbody :is(td:nth-child(5),td:nth-child(6)){color:#8c480b}
-.combined-table tbody td:nth-child(4){color:#12634f}
+.combined-table tbody td:nth-child(3){color:#086670}
+.combined-table tbody :is(td:nth-child(5),td:nth-child(6)){color:#8a500e}
+.combined-table tbody td:nth-child(4){color:#086670}
 .combined-table tfoot{background:#112a43;color:white;font-weight:700}
 .combined-track{min-width:0;height:8px;background:#e4edf3;border-radius:8px;overflow:hidden}
 .combined-fill{width:100%;height:100%;display:flex;transform-origin:left}
-:root{--shift-day:#187e67;--shift-ot:#db983f}
+:root{--shift-day:#087B83;--shift-ot:#F3B654}
 .combined-fill i:first-child{background:var(--shift-day)}
 .combined-fill i:last-child{background:var(--shift-ot)}
 .combined-note{margin:4px 8px;color:#465c71;font-size:.7rem}
@@ -1694,8 +1694,8 @@ function observeChartFills(){
   for(const panel of panels)chartFillObserver.observe(panel);
 }
 const labourCostSeries=[
-  {label:'Day labour',color:'#238168',chip:'#daf0e9'},
-  {label:'OT labour',color:'#dd9844',chip:'#ffebce'}
+  {label:'Day labour',color:'var(--shift-day)',chip:'#d9f0f1'},
+  {label:'OT labour',color:'var(--shift-ot)',chip:'#fff0d7'}
 ];
 const otherCostSeries=[
   {label:'Area',color:'#317aa6',chip:'#dceefa'},

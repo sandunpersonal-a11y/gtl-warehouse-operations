@@ -11,7 +11,7 @@ body{margin:0}
   isolation:isolate;position:relative;overflow:hidden;display:flex;flex-wrap:wrap;
   align-items:center;justify-content:space-between;gap:12px;
   padding:16px clamp(14px,3vw,44px);color:#fff;border-bottom:3px solid #26aaa8;
-  background:linear-gradient(112deg,#0c223e,#173e60 75%,#145c65);
+  background:linear-gradient(112deg,#102a43,#173e60 75%,#086670);
   box-shadow:0 3px 12px #0c223e26;
 }
 .report-header::before{
@@ -41,7 +41,7 @@ button:disabled{opacity:.5;cursor:default}
 :focus-visible{outline:2px solid #2589bf;outline-offset:2px}
 .metrics{grid-template-columns:repeat(4,minmax(0,1fr));padding:0;border:0;background:none}
 .metrics>div{background:#f7faff;border:1px solid #cdddeb;border-top:3px solid #306b98;padding:8px 10px;border-radius:6px;color:#385571}
-.metrics>div:nth-child(1){border-top-color:#187958}.metrics>div:nth-child(2){border-top-color:#b45f16}
+.metrics>div:nth-child(1){border-top-color:#087B83}.metrics>div:nth-child(2){border-top-color:#F3B654}
 .metrics>div:last-child{background:#102a44;border-color:#102a44;color:#e8f3fa}
 .metrics strong{display:block;margin-top:3px;font-size:1.08rem;overflow-wrap:anywhere;font-variant-numeric:tabular-nums;color:#142844}
 .metrics>div:last-child strong{color:white}
@@ -53,11 +53,11 @@ thead{position:sticky;top:0;background:#184c82;color:white;z-index:1}
 tbody tr:nth-child(even){background:#f4f8fb}
 tbody tr:hover{background:#e9f3fa}
 tfoot{position:sticky;bottom:0;background:#e2eef8;font-weight:700}
-.day{color:#14633c}.ot{color:#964509}
+.day{color:#086670}.ot{color:#8a500e}
 .chart-row{display:grid;grid-template-columns:84px minmax(0,1fr) 105px;gap:10px;align-items:center;margin:7px 0;font-variant-numeric:tabular-nums}
 .chart-row small{text-align:right}
 .track{display:flex;background:#edf2f7;height:10px;border-radius:4px;overflow:hidden}
-.worked{background:#21774b}.idle{background:#6985a6}
+.worked{background:#087B83}.idle{background:#6985a6}
 small{color:#52647b}
 .report-note{margin:0 0 9px;line-height:1.35}
 footer{display:flex;justify-content:flex-end;margin-top:12px}
@@ -80,9 +80,9 @@ footer{display:flex;justify-content:flex-end;margin-top:12px}
 .report-pair thead{position:static}
 #trend .plot{display:block;width:100%;min-height:130px;max-height:210px}
 .legend{display:flex;gap:13px;flex-wrap:wrap;color:#52647b;margin-bottom:8px}
-.legend b{color:#245eb2}.legend .ot{color:#a45d18}
+.legend b{color:#087B83}.legend .ot{color:#8a500e}
 .activity-row{display:grid;grid-template-columns:88px minmax(0,1fr) 70px;gap:8px;align-items:center;margin:10px 0}
-.activity-row strong{text-align:right}.activity-row .worked{background:#245eb2}.activity-row .overtime{background:#ecaa54}
+.activity-row strong{text-align:right}.activity-row .worked{background:#087B83}.activity-row .overtime{background:#F3B654}
 .variance{display:flex;justify-content:space-between;border-bottom:1px solid #e0e8f1;padding:7px 0}
 .variance b{background:#edf3fa;border-radius:3px;padding:1px 8px}
 .metrics small{display:block;margin-top:3px}.metrics>div:last-child small{color:#cbdbe8}
