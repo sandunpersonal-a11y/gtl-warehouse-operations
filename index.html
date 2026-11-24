@@ -272,8 +272,8 @@ button:not(:disabled){box-shadow:inset 0 1px 0 #ffffff8c,0 2px 0 #15395745}
 @media(max-width:720px){.operation-pair{grid-template-columns:minmax(0,1fr)}}
 
 .operation-timeline .time-band{height:9px;box-shadow:inset 0 1px 2px #142f5030,0 2px 2px #142f5020}
-.operation-timeline .time-band i:first-child{background:linear-gradient(#50b499,#238168)}
-.operation-timeline .time-band i:last-child{background:linear-gradient(#f8c886,#d38c40)}
+.operation-timeline .time-band i:first-child{background:var(--shift-day)}
+.operation-timeline .time-band i:last-child{background:var(--shift-ot)}
 .operation-timeline .time-band i{animation:timeline-fill 300ms ease-out both}
 @keyframes timeline-fill{from{width:0}}
 @media(prefers-reduced-motion:reduce){.operation-timeline .time-band i{animation:none}}
@@ -789,8 +789,9 @@ button,input,select,textarea,::file-selector-button{font-family:inherit}
 .combined-table tfoot{background:#112a43;color:white;font-weight:700}
 .combined-track{min-width:0;height:8px;background:#e4edf3;border-radius:8px;overflow:hidden}
 .combined-fill{width:100%;height:100%;display:flex;transform-origin:left}
-.combined-fill i:first-child{background:#187e67}
-.combined-fill i:last-child{background:#db983f}
+:root{--shift-day:#187e67;--shift-ot:#db983f}
+.combined-fill i:first-child{background:var(--shift-day)}
+.combined-fill i:last-child{background:var(--shift-ot)}
 .combined-note{margin:4px 8px;color:#465c71;font-size:.7rem}
 #combinedTimeline .combined-table{table-layout:auto;min-width:650px}
 #combinedTimeline .combined-table :is(th,td){padding:3px 6px;text-align:left;white-space:nowrap}
@@ -810,6 +811,7 @@ button,input,select,textarea,::file-selector-button{font-family:inherit}
 .combined-note details p{margin:3px 0 3px 13px}
 .combined-note [data-export-payroll-issues]{width:auto;margin:6px 0 0;padding:4px 8px;font-size:.74rem}
 .combined-export-status:empty{display:none}
+#combinedTimeline .combined-staff{display:inline-block;margin-inline-start:5px;color:#d5e4f1;font-size:.64rem;font-weight:600}
 </style>
 <header class="dashboard-header"><div class="job-header-actions"><div class="header-scope"><label><span>Customer</span><select id="customer"></select></label>
 <label><span>Job</span><select id="job"></select></label></div><div class="costing-report-links"><button id="openCosts" type="button" aria-haspopup="dialog"><svg class="ui-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" aria-hidden="true"><rect x="5" y="3" width="14" height="18" rx="2"/><path d="M8 8h8m-8 4h2m4 0h2m-8 4h2m4 0h2"/></svg>Job Costing</button><a href="./labour-report.html">Labour Report</a></div><p id="payrollSession" role="status"></p><button id="payrollSignIn" type="button">Payroll sign in</button><button id="payrollSignOut" type="button" hidden>Sign out</button></div><div class="dashboard-title"><img class="gtl-header-logo" src="./logo-header.png?v=golden-cost-logo" width="512" height="460" alt="GTL Job Costing"><div><p class="dashboard-brand">Global Transportation and PVT LTD</p><h1>Warehouse Operations &amp; Job Costing</h1><small>Vehicle turnaround, crew hours and job costs</small></div></div>
@@ -1033,13 +1035,19 @@ const visitLabel = o => {
 const average = rows => {const timed=rows.filter(row=>row.minutes!=null);return timed.length?sum(timed,'minutes')/timed.length:0;};
 const crewDetails = o => `<div class="crew">${[['Tally Clerks',o.tally],['Supervisors',o.supervisors],['Operators',o.operators]].map(([label,ids])=>
   `<div class="crew-role"><strong>${label}</strong><span class="chip">${ids.length}</span>${o.crewPrivate?'':'<br>EPF '+esc(ids.join(', ')||'Unrecorded')}</div>`).join('')}</div>`;
+function shiftBreakdown(day,ot){
+  const total=day+ot;
+  const dayPercent=total?Math.round(100*day/total):0;
+  const otPercent=total?100-dayPercent:0;
+  return {dayPercent,otPercent,label:`Day Hours: ${duration(day)} (${dayPercent}%) · OT Hours: ${duration(ot)} (${otPercent}%)`};
+}
 function timelineCard(rows,selected){
   const times=rows.map(o=>splitWorkingMinutes(o.start,o.end)).filter(Boolean);
   const day=sum(times,'day'),ot=sum(times,'ot'),total=day+ot;
   return `<article class="panel operation-timeline">
     <div class="time-labels">${day?`<span class="day-chip">Day Hours <b>${duration(day)}</b></span>`:''}${ot?`<span class="ot-chip">OT Hours <b>${duration(ot)}</b></span>`:''}<span>Total <b>${times.length?duration(total):'—'}</b></span></div>
     ${selected?`<p class="muted">${esc(stamp(selected.start))} → ${esc(stamp(selected.end))}</p>`:''}
-    ${total?`<div class="time-band" aria-hidden="true"><i style="width:${100*day/total}%"></i><i style="width:${100*ot/total}%"></i></div>`:''}
+    ${total?`<div class="time-band" role="img" title="${shiftBreakdown(day,ot).label}" aria-label="${shiftBreakdown(day,ot).label}"><i style="width:${100*day/total}%"></i><i style="width:${100*ot/total}%"></i></div>`:''}
   </article>`;
 }
 function staffing(rows) {
@@ -2196,13 +2204,16 @@ function applyPublishedLabour(data){
 let combinedTimelineKey;
 function combinedTimelineSummary(visits){
   const roles=crewRoles.map(([role,field])=>({role,field,day:0,ot:0,dayCents:0,otCents:0,priced:false}));
+  const staffByRole=new Map(roles.map(row=>[row.role,new Set()]));
   let partial=false;
   for(const visit of visits){
     const publication=operationPublication(visit);
     const time=splitWorkingMinutes(visit.start,visit.end);
     if(!publication?.complete)partial=true;
     for(const item of roles){
-      const count=new Set((visit[item.field]??[]).map(payrollEpf).filter(epf=>epf&&epf!=='0')).size;
+      const crew=new Set((visit[item.field]??[]).map(payrollEpf).filter(epf=>epf&&epf!=='0'));
+      const count=crew.size;
+      for(const id of crew)staffByRole.get(item.role).add(id);
       const published=publication?.roles?.find(row=>row.role===item.role);
       item.day+=time&&count?time.day*count:published?.dayMinutes??0;
       item.ot+=time&&count?time.ot*count:published?.otMinutes??0;
@@ -2216,7 +2227,8 @@ function combinedTimelineSummary(visits){
     day:sum.day+item.day,ot:sum.ot+item.ot,dayCents:sum.dayCents+item.dayCents,
     otCents:sum.otCents+item.otCents,priced:sum.priced||item.priced
   }),{day:0,ot:0,dayCents:0,otCents:0,priced:false});
-  return {roles,total,partial};
+  const staffCounts=roles.map(({role})=>staffByRole.get(role).size);
+  return {roles,total,partial,staffCounts};
 }
 let combinedIssueRows=[];
 function combinedPayrollIssues(visits){
@@ -2298,9 +2310,9 @@ function renderCombinedTimeline(visits,selected){
     combinedTimelineKey=undefined;
     return;
   }
-  const {roles,total,partial}=combinedTimelineSummary(visits);
+  const {roles,total,partial,staffCounts}=combinedTimelineSummary(visits);
   const elapsed=sum(visits,'minutes');
-  const key=JSON.stringify([el('customer').value,el('job').value,from,to,el('direction').value,el('kind').value,visits.length,elapsed,roles,partial]);
+  const key=JSON.stringify([el('customer').value,el('job').value,from,to,el('direction').value,el('kind').value,visits.length,elapsed,roles,partial,staffCounts]);
   section.hidden=false;
   const notes=partial?combinedPayrollNotes(visits):'';
   const noteArea=section.querySelector('.combined-notes');
@@ -2313,13 +2325,9 @@ function renderCombinedTimeline(visits,selected){
   if(key===combinedTimelineKey)return;
   combinedTimelineKey=key;
   const crewBar=row=>{
-    const total=row.day+row.ot;
-    const day=total?Math.round(100*row.day/total):0;
-    const ot=total?100-day:0;
-    const dayLabel=`Day Hours: ${duration(row.day)} (${day}%)`;
-    const otLabel=`OT Hours: ${duration(row.ot)} (${ot}%)`;
-    return `<div class="combined-track" role="img" aria-label="${dayLabel} · ${otLabel}" title="${dayLabel} · ${otLabel}">
-      <div class="combined-fill"><i style="width:${day}%" title="${dayLabel}">${day>=12?day+'%':''}</i><i style="width:${ot}%" title="${otLabel}">${ot>=12?ot+'%':''}</i></div></div>`;
+    const {dayPercent:day,otPercent:ot,label}=shiftBreakdown(row.day,row.ot);
+    return `<div class="combined-track" role="img" aria-label="${label}" title="${label}">
+      <div class="combined-fill"><i style="width:${day}%">${day>=12?day+'%':''}</i><i style="width:${ot}%">${ot>=12?ot+'%':''}</i></div></div>`;
   };
   const value=(type,amount)=>amount===null?'—':`<span data-combined-type="${type}" data-combined-value="${amount}"></span>`;
   const cells=row=>[
@@ -2332,7 +2340,7 @@ function renderCombinedTimeline(visits,selected){
     <table class="combined-table"><thead><tr><th scope="col">Role</th><th scope="col">Crew Hours</th><th scope="col">Day Hours</th><th scope="col">Day Value</th><th scope="col">OT Hours</th><th scope="col">OT Value</th><th scope="col">Total Hours</th><th scope="col">Total Value</th></tr></thead>
     <tbody>${roles.map(row=>`<tr><th scope="row">${row.role}</th>
       <td>${crewBar(row)}</td>${cells(row)}</tr>`).join('')}</tbody>
-    <tfoot><tr><th scope="row" colspan="2">Total Crew</th>${cells(total)}</tr></tfoot></table></div>
+    <tfoot><tr><th scope="row" colspan="2">Total Crew <span class="combined-staff">Sup ${staffCounts[0]} · Tally ${staffCounts[1]} · Opr ${staffCounts[2]}</span></th>${cells(total)}</tr></tfoot></table></div>
     <div class="combined-notes">${notes}</div>`;
   section.querySelector('.combined-notes').dataset.markup=notes;
   const amounts=[...section.querySelectorAll('[data-combined-value]')];
