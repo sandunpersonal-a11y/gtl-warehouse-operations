@@ -881,6 +881,7 @@ html.staff-entry{background:radial-gradient(ellipse at 75% 15%,#12616a 0%,#15365
 #payrollLogin .staff-keyboard-submit:not(:focus){position:absolute;width:1px;height:1px;margin:-1px;padding:0;overflow:hidden;clip-path:inset(50%);white-space:nowrap}
 #payrollLoginStatus{font-size:12px;margin:6px 0;color:#23525b}
 #payrollLogin .staff-login-actions{margin-top:10px}
+#staffContinuePublic{margin-inline-start:auto}
 #payrollLogin .staff-login-actions button{padding:5px 9px;border-radius:5px;font-size:12px;box-shadow:none}
 
 html.staff-entry body::before{content:"";position:fixed;inset:0;pointer-events:none;background:linear-gradient(105deg,transparent 28%,#b8f1f410 50%,transparent 72%);animation:staff-light 6s ease-in-out infinite}
@@ -934,16 +935,16 @@ html.guest-dashboard :is(#openCosts,.costing-report-links,#monthlyCosts,#combine
 <p>Global Park</p><strong>Warehouse Operations<br>&amp; Job Costing</strong></section>
 <div class="staff-login-panel">
 <form method="dialog"><button class="close" aria-label="Close sign-in">Close</button></form>
-<h2 id="staffLoginHeading">Verify your email</h2>
-<p id="staffLoginDescription">Use your approved email to receive a sign-in link.</p>
-<p id="staffEmailField"><label for="payrollEmail">Email address</label><input id="payrollEmail" type="email" required autocomplete="username" list="staffEmailSuggestions" form="payrollLoginForm"></p>
+<h2 id="staffLoginHeading">Staff Sign In</h2>
+<p id="staffLoginDescription">Enter your email and password.</p>
+<p id="staffEmailField"><label for="payrollEmail">Email address</label><input id="payrollEmail" type="email" required autocomplete="username" list="staffEmailSuggestions" form="staffPasswordForm"></p>
 <datalist id="staffEmailSuggestions"></datalist>
-<form id="staffPasswordForm" hidden>
+<form id="staffPasswordForm">
 <label>Password<input id="staffPassword" type="password" required autocomplete="current-password"></label>
 <label class="staff-remember"><input id="staffRemember" type="checkbox" checked> Remember me</label>
 <button type="submit">Sign in</button>
 </form>
-<form id="payrollLoginForm">
+<form id="payrollLoginForm" hidden>
 <label>Slide right to verify your email
 <input id="staffVerifySlider" type="range" min="0" max="100" value="0" aria-label="Slide right to send sign-in link"></label>
 <button type="submit" class="staff-keyboard-submit">Verify email</button>
@@ -954,13 +955,14 @@ html.guest-dashboard :is(#openCosts,.costing-report-links,#monthlyCosts,#combine
 <button type="submit">Set password and sign in</button>
 </form>
 <p id="payrollLoginStatus" role="status"></p>
-<div class="staff-login-actions"><button type="button" id="staffContinuePublic">Continue as Guest</button>
-<button type="button" id="staffUsePassword">Already set a password?</button></div>
+<div class="staff-login-actions"><button type="button" id="staffNewUser">New User</button>
+<button type="button" id="staffUsePassword" hidden>Back to Sign In</button>
+<button type="button" id="staffContinuePublic">Continue as Guest</button></div>
 </div></dialog>
 <dialog id="staffWelcome" aria-labelledby="staffWelcomeHeading">
 <img src="./logo-header.png?v=golden-cost-logo" alt="GTL">
 <h2 id="staffWelcomeHeading">Welcome to GTL Job Costing Dashboard</h2>
-<p>Sandun Prasanna</p>
+<p id="staffWelcomeName">Sandun Prasanna</p>
 <form method="dialog"><button type="submit">Continue to Dashboard</button></form>
 </dialog>
 <dialog id="payrollLock" aria-labelledby="payrollLockTitle">
@@ -2903,7 +2905,6 @@ async function saveMonthlyPayroll(records,hours,fromUpload=false){
   }
 }
 const pilotStaffEmail='sandun.jayaweera123@gmail.com';
-const pilotStaffUid='2f2106c8-8a76-47dc-8d6e-e7b7d7ba9f39';
 let verifiedStaffUid='', staffBusy=false;
 const staffEmailKey='gtl-staff-last-email';
 const staffSetupKey='gtl-staff-setup-pending';
@@ -2914,14 +2915,14 @@ function revealDashboard(){
 function holdDashboard(){
   document.documentElement.classList.add('staff-entry');
 }
-function markStaffSetup(pending){
+function markStaffSetup(uid){
   try{
-    if(pending)localStorage.setItem(staffSetupKey,'1');
+    if(uid)localStorage.setItem(staffSetupKey,uid);
     else localStorage.removeItem(staffSetupKey);
   }catch{}
 }
-function staffSetupPending(){
-  try{return localStorage.getItem(staffSetupKey)==='1';}catch{return false;}
+function staffSetupPending(uid){
+  try{return Boolean(uid)&&localStorage.getItem(staffSetupKey)===uid;}catch{return false;}
 }
 function setStaffStage(stage){
   const setup=stage==='password';
@@ -2933,23 +2934,26 @@ function setStaffStage(stage){
   el('payrollEmail').disabled=setup;
   el('payrollEmail').setAttribute('form',returning?'staffPasswordForm':'payrollLoginForm');
   el('staffUsePassword').hidden=setup||returning;
+  el('staffNewUser').hidden=!returning;
   el('staffLoginHeading').textContent=setup?'Create your password':returning?'Staff Sign In':'Verify your email';
   el('staffLoginDescription').textContent=setup?'Your email is verified. Create a password for future sign-ins.':returning?'Enter your email and password.':'Use your approved email to receive a sign-in link.';
 }
 function rememberStaffEmail(email){
   try{localStorage.setItem(staffEmailKey,email);}catch{}
 }
-function openStaffWelcome(){
+function openStaffWelcome(user){
+  el('staffWelcomeName').textContent=user.email?.toLowerCase()===pilotStaffEmail?'Sandun Prasanna':user.email||'';
   staffWelcomePending=true;
   holdDashboard();
   el('payrollLogin').close();
   el('staffWelcome').showModal();
 }
-async function requirePilotRole(user){
-  if(user?.id!==pilotStaffUid||user?.email?.toLowerCase()!==pilotStaffEmail)throw new Error('This account is outside the Management pilot.');
+async function requireStaffRole(user){
+  if(!user?.id)throw new Error('Verify your email again.');
+  if(user.email?.toLowerCase()===payrollAdminEmail)return;
   const {data,error}=await payrollClient.rpc('gtl_dashboard_role');
   if(error)throw error;
-  if(data!=='management')throw new Error('Management role has not been assigned.');
+  if(!['management','payroll_admin'].includes(data))throw new Error('Staff access has not been assigned to this email.');
 }
 async function runStaffAction(action){
   if(staffBusy)return;
@@ -2968,10 +2972,18 @@ function showStaffEntry(){
   el('staffEmailSuggestions').replaceChildren(...suggestions.map(value=>new Option(value)));
   el('payrollEmail').value=saved;
   el('payrollLoginStatus').textContent='';
-  setStaffStage(saved&&!staffSetupPending()?'sign-in':'email');
+  setStaffStage('sign-in');
   if(!el('payrollLogin').open)el('payrollLogin').showModal();
 }
 el('payrollSignIn').addEventListener('click',showStaffEntry);
+el('staffNewUser').addEventListener('click',()=>{
+  resetVerifySlider();
+  el('payrollEmail').value='';
+  el('staffPassword').value='';
+  el('payrollLoginStatus').textContent='';
+  setStaffStage('email');
+  el('payrollEmail').focus();
+});
 el('staffUsePassword').addEventListener('click',()=>{
   el('payrollLoginStatus').textContent='';
   setStaffStage('sign-in');
@@ -3018,9 +3030,10 @@ el('staffPasswordForm').addEventListener('submit',event=>{
     setStaffRemember(el('staffRemember').checked);
     const {data,error}=await payrollClient.auth.signInWithPassword({email,password:el('staffPassword').value});
     if(error)throw error;
+    try{await requireStaffRole(data.user);}
+    catch(error){await payrollClient.auth.signOut({scope:'local'});throw error;}
     rememberStaffEmail(email);
-    if(email===pilotStaffEmail){await requirePilotRole(data.user);openStaffWelcome();}
-    else {revealDashboard();el('payrollLogin').close();}
+    openStaffWelcome(data.user);
   });
 });
 const verifySlider=el('staffVerifySlider');
@@ -3066,12 +3079,11 @@ async function finishStaffLink(){
   try{
     const {data,error}=await payrollClient.auth.getUser();
     if(error)throw error;
-    if(data.user?.id!==pilotStaffUid){revealDashboard();return;}
     holdDashboard();
-    markStaffSetup(true);
-    verifiedStaffUid=data.user.id;
+    verifiedStaffUid=data.user?.id||'';
     if(!el('payrollLogin').open)el('payrollLogin').showModal();
-    await requirePilotRole(data.user);
+    await requireStaffRole(data.user);
+    markStaffSetup(data.user.id);
     setStaffStage('password');
     status.textContent='';
     el('staffNewPassword').focus();
@@ -3088,14 +3100,14 @@ el('staffSetupForm').addEventListener('submit',event=>{
     const {data:sessionData,error:sessionError}=await payrollClient.auth.getUser();
     if(sessionError)throw sessionError;
     if(!verifiedStaffUid||sessionData.user?.id!==verifiedStaffUid)throw new Error('Verify your email again.');
-    await requirePilotRole(sessionData.user);
+    await requireStaffRole(sessionData.user);
     setStaffRemember(true);
     const {error}=await payrollClient.auth.updateUser({password});
     if(error)throw error;
     verifiedStaffUid='';
     markStaffSetup(false);
-    rememberStaffEmail(pilotStaffEmail);
-    openStaffWelcome();
+    rememberStaffEmail(sessionData.user.email);
+    openStaffWelcome(sessionData.user);
   });
 });
 async function refreshSharedPayroll(){
@@ -3559,7 +3571,7 @@ if(payrollClient){
       const user=session?.user??null;
       setPayrollSession(user);
       if(event!=='INITIAL_SESSION')return;
-      if(isStaffLinkReturn||(user?.id===pilotStaffUid&&staffSetupPending())){
+      if(isStaffLinkReturn||staffSetupPending(user?.id)){
         if(user)void finishStaffLink();
         else showStaffEntry();
       }else if(user){
