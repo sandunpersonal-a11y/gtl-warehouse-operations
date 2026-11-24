@@ -791,6 +791,14 @@ button,input,select,textarea,::file-selector-button{font-family:inherit}
 .combined-fill i:first-child{background:#187e67}
 .combined-fill i:last-child{background:#db983f}
 .combined-note{margin:4px 8px;color:#465c71;font-size:.7rem}
+#combinedTimeline .combined-table{table-layout:auto;min-width:650px}
+#combinedTimeline .combined-table :is(th,td){padding:3px 6px;text-align:left;white-space:nowrap}
+#combinedTimeline .combined-table thead th:nth-child(2){width:156px}
+#combinedTimeline .combined-table td small{display:inline;margin-inline-start:4px;font-size:.68rem}
+#combinedTimeline .combined-track{width:144px;height:14px;border-radius:4px}
+.combined-fill i{display:grid;place-items:center;flex-shrink:0;overflow:hidden;font:700 .61rem/1 Calibri,Arial,sans-serif;cursor:help}
+.combined-fill i:first-child{color:white}
+.combined-fill i:last-child{color:#241709}
 </style>
 <header class="dashboard-header"><div class="job-header-actions"><div class="header-scope"><label><span>Customer</span><select id="customer"></select></label>
 <label><span>Job</span><select id="job"></select></label></div><div class="costing-report-links"><button id="openCosts" type="button" aria-haspopup="dialog"><svg class="ui-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" aria-hidden="true"><rect x="5" y="3" width="14" height="18" rx="2"/><path d="M8 8h8m-8 4h2m4 0h2m-8 4h2m4 0h2"/></svg>Job Costing</button><a href="./labour-report.html">Labour Report</a></div><p id="payrollSession" role="status"></p><button id="payrollSignIn" type="button">Payroll sign in</button><button id="payrollSignOut" type="button" hidden>Sign out</button></div><div class="dashboard-title"><img class="gtl-header-logo" src="./logo-header.png?v=golden-cost-logo" width="512" height="460" alt="GTL Job Costing"><div><p class="dashboard-brand">Global Transportation and PVT LTD</p><h1>Warehouse Operations &amp; Job Costing</h1><small>Vehicle turnaround, crew hours and job costs</small></div></div>
@@ -2249,18 +2257,26 @@ function renderCombinedTimeline(visits,selected){
   }
   if(key===combinedTimelineKey)return;
   combinedTimelineKey=key;
-  const max=Math.max(1,...roles.map(row=>row.day+row.ot));
+  const crewBar=row=>{
+    const total=row.day+row.ot;
+    const day=total?Math.round(100*row.day/total):0;
+    const ot=total?100-day:0;
+    const dayLabel=`Day Hours: ${duration(row.day)} (${day}%)`;
+    const otLabel=`OT Hours: ${duration(row.ot)} (${ot}%)`;
+    return `<div class="combined-track" role="img" aria-label="${dayLabel} · ${otLabel}" title="${dayLabel} · ${otLabel}">
+      <div class="combined-fill"><i style="width:${day}%" title="${dayLabel}">${day>=12?day+'%':''}</i><i style="width:${ot}%" title="${otLabel}">${ot>=12?ot+'%':''}</i></div></div>`;
+  };
   const value=(type,amount)=>amount===null?'—':`<span data-combined-type="${type}" data-combined-value="${amount}"></span>`;
   const cells=row=>[
     [row.day,row.dayCents],[row.ot,row.otCents],[row.day+row.ot,row.dayCents+row.otCents]
   ].map(([minutes,cents])=>`<td><strong>${value('time',minutes)}</strong><small>${value('cost',row.priced?cents:null)}</small></td>`).join('');
-  section.innerHTML=`<div class="combined-heading"><h2 id="combinedHeading">Combined Operations &amp; Labour Hours</h2></div>
+  section.innerHTML=`<div class="combined-heading"><h2 id="combinedHeading">Loading &amp; Unloading · Combined Operations &amp; Labour Hours</h2></div>
     <div class="combined-kpis"><div>Vehicle Operations <strong>${value('count',visits.length)}</strong></div>
     <div>Total Vehicle Duration <strong>${value('time',elapsed)}</strong></div></div>
     <div class="combined-scroll" tabindex="0" aria-label="Crew hours and payroll costs">
     <table class="combined-table"><thead><tr><th scope="col">Role</th><th scope="col">Crew Hours</th><th scope="col">Day</th><th scope="col">OT</th><th scope="col">Total</th></tr></thead>
     <tbody>${roles.map(row=>`<tr><th scope="row">${row.role}</th>
-      <td><div class="combined-track" aria-hidden="true"><div class="combined-fill"><i style="width:${100*row.day/max}%"></i><i style="width:${100*row.ot/max}%"></i></div></div></td>${cells(row)}</tr>`).join('')}</tbody>
+      <td>${crewBar(row)}</td>${cells(row)}</tr>`).join('')}</tbody>
     <tfoot><tr><th scope="row" colspan="2">Total Crew</th>${cells(total)}</tr></tfoot></table></div>
     <div class="combined-notes">${notes}</div>`;
   section.querySelector('.combined-notes').dataset.markup=notes;
