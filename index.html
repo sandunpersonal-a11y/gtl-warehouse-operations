@@ -758,22 +758,35 @@ button,input,select,textarea,::file-selector-button{font-family:inherit}
 @media(max-width:720px){.costing-report-links a{min-height:40px}}
 
 #combinedTimeline[hidden]{display:none}
-#combinedTimeline{max-width:900px;margin:0 auto 10px;background:#fff;border:1px solid #d2e0eb;border-radius:8px;overflow:hidden;color:#142844}
+#combinedTimeline{width:100%;margin:0 0 10px;background:#fff;border:1px solid #d2e0eb;border-radius:8px;overflow:hidden;color:#142844}
 .combined-heading{background:linear-gradient(112deg,#0c223e,#173e60 75%,#145c65);color:white;padding:6px 10px}
 .combined-heading h2{margin:0;font-size:.9rem}
 .combined-kpis{display:flex;flex-wrap:wrap;gap:5px;padding:6px 8px}
-.combined-kpis div{flex:1 1 140px;display:flex;justify-content:space-between;gap:8px;background:#edf4fa;border-radius:4px;padding:4px 7px;font-size:.76rem}
+.combined-kpis div{display:inline-flex;align-items:baseline;gap:6px;background:#edf4fa;border-radius:4px;padding:4px 7px;font-size:.76rem}
 .combined-scroll{overflow-x:auto}
-.combined-table{width:100%;min-width:525px;border-collapse:collapse;font-size:.74rem;font-variant-numeric:tabular-nums;white-space:nowrap}
-.combined-table :is(th,td){padding:4px 8px;text-align:right}
+.combined-table{width:100%;table-layout:fixed;border-collapse:collapse;font-size:.74rem;font-variant-numeric:tabular-nums;white-space:nowrap}
+.combined-table :is(th,td){padding:3px 7px;text-align:right}
 .combined-table th:first-child{text-align:left}
+#combinedTimeline .combined-table tfoot :is(th,td){background:#112a43;color:#fff;border:0}
+.combined-table thead th:nth-child(2){width:30%;text-align:left}
+.combined-kpis strong{font-variant-numeric:tabular-nums}
+.combined-note summary{cursor:pointer}
+.combined-note ul{margin:3px 0;padding-inline-start:17px}
+@media(max-width:600px){
+  .combined-kpis{padding:4px 5px;gap:3px}
+  .combined-kpis div{font-size:.68rem;padding:3px 5px;gap:4px}
+  #combinedTimeline .combined-table :is(th,td){padding:3px 4px;font-size:.68rem;white-space:normal;overflow-wrap:anywhere}
+  #combinedTimeline .combined-table td small{font-size:.62rem}
+  .combined-table thead th:nth-child(2){width:15%}
+  .combined-track{min-width:0;height:5px}
+}
 .combined-table thead{background:#eaf2f9;color:#25445f}
 .combined-table tbody tr:nth-child(even){background:#f4f8fc}
 .combined-table td small{display:block;font-size:.68rem}
 .combined-table tbody td:nth-child(3){color:#12634f}
 .combined-table tbody td:nth-child(4){color:#8c480b}
 .combined-table tfoot{background:#112a43;color:white;font-weight:700}
-.combined-track{min-width:55px;height:8px;background:#e4edf3;border-radius:8px;overflow:hidden}
+.combined-track{min-width:0;height:8px;background:#e4edf3;border-radius:8px;overflow:hidden}
 .combined-fill{width:100%;height:100%;display:flex;transform-origin:left}
 .combined-fill i:first-child{background:#187e67}
 .combined-fill i:last-child{background:#db983f}
@@ -2180,6 +2193,43 @@ function combinedTimelineSummary(visits){
   }),{day:0,ot:0,dayCents:0,otCents:0,priced:false});
   return {roles,total,partial};
 }
+function combinedPayrollNotes(visits){
+  if(!payrollUser)return '';
+  const issues=new Map();
+  const add=(label,epf)=> {
+    if(!issues.has(label))issues.set(label,new Set());
+    if(epf)issues.get(label).add(epf);
+  };
+  const incomplete=visits.filter(visit=>!operationPublication(visit)?.complete);
+  if(canManagePayroll()){
+    for(const visit of incomplete){
+      const month=visit.start.slice(0,7);
+      requestDiagnosticPayroll(month);
+      if(visit.crewPrivate)requestMovementCrew(month);
+      const payroll=diagnosticPayrollByMonth.get(month);
+      const crew=visibleVehicleCrew(visit);
+      if(payroll?.status==='unavailable')add(month+' · payroll lookup unavailable');
+      else if(payroll?.status!=='ready')add(month+' · checking payroll');
+      else if(!payroll.hours)add(month+' · monthly paid hours unavailable');
+      if(!splitWorkingMinutes(visit.start,visit.end))add('Some operations have missing or invalid Start / End times');
+      if(!crew){
+        add(movementCrewByMonth.get(month)?.status==='unavailable'?'Crew lookup unavailable':'Checking crew assignments');
+        continue;
+      }
+      const ids=new Set(crewRoles.flatMap(([,field])=>(crew[field]??[]).map(payrollEpf)).filter(epf=>/^\d+$/.test(epf)&&epf!=='0'));
+      if(!ids.size)add('Some operations have no crew EPFs recorded');
+      if(payroll?.status!=='ready'||!payroll.hours)continue;
+      for(const epf of ids){
+        const record=payroll.records.get(epf);
+        if(!record)add(month+' · EPF missing from payroll',epf);
+        else if(!knownAmount(regularPay(record))||!knownAmount(record.basic))add(month+' · pay rate missing',epf);
+        else if(!operationPublication(visit))add(month+' · published cost unavailable',epf);
+      }
+    }
+  }
+  return `<details class="combined-note"><summary>Incomplete payroll costing · ${incomplete.length} operation(s)</summary>
+    <ul>${[...issues].map(([reason,ids])=>`<li>${esc(reason)}${ids.size?' · EPF '+esc([...ids].join(', ')):''}</li>`).join('')||'<li>Published payroll coverage is incomplete.</li>'}</ul></details>`;
+}
 function renderCombinedTimeline(visits,selected){
   const section=el('combinedTimeline');
   if(selected||!showAreaForJobScope()||!visits.length){
@@ -2191,6 +2241,12 @@ function renderCombinedTimeline(visits,selected){
   const elapsed=sum(visits,'minutes');
   const key=JSON.stringify([el('customer').value,el('job').value,from,to,el('direction').value,el('kind').value,visits.length,elapsed,roles,partial]);
   section.hidden=false;
+  const notes=partial?combinedPayrollNotes(visits):'';
+  const noteArea=section.querySelector('.combined-notes');
+  if(noteArea&&noteArea.dataset.markup!==notes){
+    noteArea.innerHTML=notes;
+    noteArea.dataset.markup=notes;
+  }
   if(key===combinedTimelineKey)return;
   combinedTimelineKey=key;
   const max=Math.max(1,...roles.map(row=>row.day+row.ot));
@@ -2206,7 +2262,8 @@ function renderCombinedTimeline(visits,selected){
     <tbody>${roles.map(row=>`<tr><th scope="row">${row.role}</th>
       <td><div class="combined-track" aria-hidden="true"><div class="combined-fill"><i style="width:${100*row.day/max}%"></i><i style="width:${100*row.ot/max}%"></i></div></div></td>${cells(row)}</tr>`).join('')}</tbody>
     <tfoot><tr><th scope="row" colspan="2">Total Crew</th>${cells(total)}</tr></tfoot></table></div>
-    ${partial?'<p class="combined-note">Known published payroll costs only. Some operations have incomplete costing.</p>':''}`;
+    <div class="combined-notes">${notes}</div>`;
+  section.querySelector('.combined-notes').dataset.markup=notes;
   const amounts=[...section.querySelectorAll('[data-combined-value]')];
   const bars=[...section.querySelectorAll('.combined-fill')];
   function paint(progress){
