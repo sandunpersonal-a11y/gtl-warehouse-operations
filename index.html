@@ -789,7 +789,7 @@ button,input,select,textarea,::file-selector-button{font-family:inherit}
 .combined-table tfoot{background:#112a43;color:white;font-weight:700}
 .combined-track{min-width:0;height:8px;background:#e4edf3;border-radius:8px;overflow:hidden}
 .combined-fill{width:100%;height:100%;display:flex;transform-origin:left}
-:root{--shift-day:#087B83;--shift-ot:#F3B654}
+:root{--shift-day:#087B83;--shift-ot:#D19B50}
 .combined-fill i:first-child{background:var(--shift-day)}
 .combined-fill i:last-child{background:var(--shift-ot)}
 .combined-note{margin:4px 8px;color:#465c71;font-size:.7rem}
@@ -812,6 +812,12 @@ button,input,select,textarea,::file-selector-button{font-family:inherit}
 .combined-note [data-export-payroll-issues]{width:auto;margin:6px 0 0;padding:4px 8px;font-size:.74rem}
 .combined-export-status:empty{display:none}
 #combinedTimeline .combined-staff{display:inline-block;margin-inline-start:5px;color:#d5e4f1;font-size:.64rem;font-weight:600}
+
+.combined-bar-tooltip{position:relative}
+.combined-bar-tooltip>span{display:none;position:absolute;z-index:3;inset-inline-start:0;top:calc(100% + 3px);background:#102a43;color:white;padding:4px 7px;border-radius:4px;font-size:.7rem;pointer-events:none;white-space:nowrap}
+.combined-bar-tooltip:is(:hover,:focus)>span{display:block}
+#combinedTimeline .combined-scroll{padding-bottom:24px;margin-bottom:-24px}
+#combinedTimeline .combined-staff{white-space:normal}
 </style>
 <header class="dashboard-header"><div class="job-header-actions"><div class="header-scope"><label><span>Customer</span><select id="customer"></select></label>
 <label><span>Job</span><select id="job"></select></label></div><div class="costing-report-links"><button id="openCosts" type="button" aria-haspopup="dialog"><svg class="ui-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" aria-hidden="true"><rect x="5" y="3" width="14" height="18" rx="2"/><path d="M8 8h8m-8 4h2m4 0h2m-8 4h2m4 0h2"/></svg>Job Costing</button><a href="./labour-report.html">Labour Report</a></div><p id="payrollSession" role="status"></p><button id="payrollSignIn" type="button">Payroll sign in</button><button id="payrollSignOut" type="button" hidden>Sign out</button></div><div class="dashboard-title"><img class="gtl-header-logo" src="./logo-header.png?v=golden-cost-logo" width="512" height="460" alt="GTL Job Costing"><div><p class="dashboard-brand">Global Transportation and PVT LTD</p><h1>Warehouse Operations &amp; Job Costing</h1><small>Vehicle turnaround, crew hours and job costs</small></div></div>
@@ -1578,7 +1584,7 @@ async function buildMonthlyExcel(sheets,{blueHeader=false}={}){
       const style=blueHeader&&j<2?' s="1"':'';
       return Number.isFinite(cell)?`<c r="${address}"${style}><v>${cell}</v></c>`:`<c r="${address}"${style} t="inlineStr"><is><t xml:space="preserve">${xml(cell)}</t></is></c>`;
     }).join('')}</row>`).join('');
-    zip.file(`xl/worksheets/sheet${i+1}.xml`,`<worksheet xmlns="${ns}/spreadsheetml/2006/main"><cols><col min="1" max="${blueHeader?8:14}" width="22" customWidth="1"/>${blueHeader?'<col min="9" max="9" width="60" customWidth="1"/>':''}</cols><sheetData>${body}</sheetData>${blueHeader?`<autoFilter ref="A2:I${rows.length}"/><mergeCells count="1"><mergeCell ref="A1:I1"/></mergeCells>`:''}</worksheet>`);
+    zip.file(`xl/worksheets/sheet${i+1}.xml`,`<worksheet xmlns="${ns}/spreadsheetml/2006/main"><cols><col min="1" max="${blueHeader?9:14}" width="22" customWidth="1"/>${blueHeader?'<col min="10" max="10" width="60" customWidth="1"/>':''}</cols><sheetData>${body}</sheetData>${blueHeader?`<autoFilter ref="A2:J${rows.length}"/><mergeCells count="1"><mergeCell ref="A1:J1"/></mergeCells>`:''}</worksheet>`);
   });
   return zip.generateAsync({type:'blob',compression:'DEFLATE',mimeType:content+'.sheet'});
 }
@@ -2230,6 +2236,11 @@ function combinedTimelineSummary(visits){
   const staffCounts=roles.map(({role})=>staffByRole.get(role).size);
   return {roles,total,partial,staffCounts};
 }
+const originalMovementDocDates={"[\"DSV\",\"4974\",\"297630\"]":"2026-10-01","[\"DSV\",\"4974\",\"297631\"]":"2026-10-01","[\"DSV\",\"4974\",\"297632\"]":"2026-10-01","[\"DSV\",\"4974\",\"297634\"]":"2026-10-01","[\"DSV\",\"4974\",\"297646\"]":"2026-10-01","[\"DSV\",\"4974\",\"297673\"]":"2026-10-01","[\"DSV\",\"4974\",\"297676\"]":"2026-10-02","[\"DSV\",\"4974\",\"297686\"]":"2026-10-02","[\"DSV\",\"4974\",\"297689\"]":"2026-10-02","[\"DSV\",\"4974\",\"297710\"]":"2026-10-02","[\"DSV\",\"4974\",\"297733\"]":"2026-10-03","[\"DSV\",\"4974\",\"297726\"]":"2026-10-03","[\"DSV\",\"4974\",\"297734\"]":"2026-10-03","[\"DSV\",\"4974\",\"297786\"]":"2026-10-05","[\"DSV\",\"4974\",\"297796\"]":"2026-10-05","[\"DSV\",\"4974\",\"297699\"]":"2026-10-05","[\"DSV\",\"4974\",\"297788\"]":"2026-10-05","[\"DSV\",\"4974\",\"297790\"]":"2026-10-06","[\"DSV\",\"4974\",\"297798\"]":"2026-10-06","[\"DSV\",\"4974\",\"297804\"]":"2026-10-06","[\"DSV\",\"4974\",\"297811\"]":"2026-10-06","[\"DSV\",\"4974\",\"297841\"]":"2026-10-06","[\"DSV\",\"4974\",\"297840\"]":"2026-10-06","[\"DSV\",\"4974\",\"297850\"]":"2026-10-07","[\"DSV\",\"4974\",\"297851\"]":"2026-10-07","[\"DSV\",\"4974\",\"297854\"]":"2026-10-07","[\"DSV\",\"4974\",\"297885\"]":"2026-10-07","[\"DSV\",\"4974\",\"297892\"]":"2026-10-08","[\"DSV\",\"4974\",\"297890\"]":"2026-10-08","[\"DSV\",\"4974\",\"297980\"]":"2026-10-09","[\"DSV\",\"4974\",\"297987\"]":"2026-10-09","[\"DSV\",\"4974\",\"297948\"]":"2026-10-09","[\"DSV\",\"4974\",\"297924\"]":"2026-10-09","[\"DSV\",\"4974\",\"297940\"]":"2026-10-09","[\"DSV\",\"4974\",\"297957\"]":"2026-10-09","[\"DSV\",\"4974\",\"297962\"]":"2026-10-09","[\"DSV\",\"4974\",\"297981\"]":"2026-10-09","[\"DSV\",\"4974\",\"297986\"]":"2026-10-09","[\"DSV\",\"4974\",\"297992\"]":"2026-10-10","[\"DSV\",\"4974\",\"298008\"]":"2026-10-10","[\"DSV\",\"4974\",\"298015\"]":"2026-10-10","[\"DSV\",\"4974\",\"297988\"]":"2026-10-10","[\"DSV\",\"4974\",\"297990\"]":"2026-10-10","[\"DSV\",\"4974\",\"297991\"]":"2026-10-10","[\"DSV\",\"4974\",\"298016\"]":"2026-10-11","[\"DSV\",\"4974\",\"298023\"]":"2026-10-12","[\"DSV\",\"4974\",\"298091\"]":"2026-10-13","[\"DSV\",\"4974\",\"298126\"]":"2026-10-13","[\"DSV\",\"4974\",\"298054\"]":"2026-10-13","[\"DSV\",\"4974\",\"298056\"]":"2026-10-13","[\"DSV\",\"4974\",\"298058\"]":"2026-10-13","[\"DSV\",\"4974\",\"298050\"]":"2026-10-13","[\"DSV\",\"4974\",\"298117\"]":"2026-10-13","[\"DSV\",\"4974\",\"298125\"]":"2026-10-13","[\"DSV\",\"4974\",\"298121\"]":"2026-10-13","[\"DSV\",\"4974\",\"298177\"]":"2026-10-14","[\"DSV\",\"4974\",\"298123\"]":"2026-10-14","[\"DSV\",\"4974\",\"298129\"]":"2026-10-14","[\"DSV\",\"4974\",\"298130\"]":"2026-10-14","[\"DSV\",\"4974\",\"298133\"]":"2026-10-14","[\"DSV\",\"4974\",\"298139\"]":"2026-10-14","[\"DSV\",\"4974\",\"298163\"]":"2026-10-14","[\"DSV\",\"4974\",\"298157\"]":"2026-10-14","[\"DSV\",\"4974\",\"298156\"]":"2026-10-14","[\"DSV\",\"4974\",\"298171\"]":"2026-10-14","[\"DSV\",\"4974\",\"298173\"]":"2026-10-14","[\"DSV\",\"4974\",\"298178\"]":"2026-10-14","[\"DSV\",\"4974\",\"298181\"]":"2026-10-14","[\"DSV\",\"4974\",\"298184\"]":"2026-10-15","[\"DSV\",\"4974\",\"298200\"]":"2026-10-15","[\"DSV\",\"4974\",\"298182\"]":"2026-10-15","[\"DSV\",\"4974\",\"298214\"]":"2026-10-15","[\"DSV\",\"4974\",\"298213\"]":"2026-10-15","[\"DSV\",\"4974\",\"298201\"]":"2026-10-15","[\"DSV\",\"4974\",\"298211\"]":"2026-10-15","[\"DSV\",\"4974\",\"298222\"]":"2026-10-16","[\"DSV\",\"4974\",\"298216\"]":"2026-10-16","[\"DSV\",\"4974\",\"298217\"]":"2026-10-16","[\"DSV\",\"4974\",\"298219\"]":"2026-10-16","[\"DSV\",\"4974\",\"298290\"]":"2026-10-17","[\"DSV\",\"4974\",\"298287\"]":"2026-10-17","[\"DSV\",\"4974\",\"298257\"]":"2026-10-17","[\"DSV\",\"4974\",\"298318\"]":"2026-10-19","[\"DSV\",\"4974\",\"298342\"]":"2026-10-19","[\"DSV\",\"4974\",\"298350\"]":"2026-10-19","[\"DSV\",\"4974\",\"298344\"]":"2026-10-19","[\"DSV\",\"4974\",\"298390\"]":"2026-10-20","[\"DSV\",\"4974\",\"298413\"]":"2026-10-20","[\"DSV\",\"4974\",\"298374\"]":"2026-10-20","[\"DSV\",\"4974\",\"298366\"]":"2026-10-20","[\"DSV\",\"4974\",\"298407\"]":"2026-10-20","[\"DSV\",\"4974\",\"298412\"]":"2026-10-20","[\"DSV\",\"4974\",\"298415\"]":"2026-10-21","[\"DSV\",\"4974\",\"298420\"]":"2026-10-21","[\"DSV\",\"4974\",\"298421\"]":"2026-10-21","[\"DSV\",\"4974\",\"298435\"]":"2026-10-21","[\"DSV\",\"4974\",\"298446\"]":"2026-10-21","[\"DSV\",\"4974\",\"298452\"]":"2026-10-21","[\"DSV\",\"4974\",\"298448\"]":"2026-10-21","[\"DSV\",\"4974\",\"298442\"]":"2026-10-21","[\"DSV\",\"4974\",\"298434\"]":"2026-10-21","[\"DSV\",\"4974\",\"298451\"]":"2026-10-21","[\"DSV\",\"4974\",\"298458\"]":"2026-10-22","[\"DSV\",\"4974\",\"298457\"]":"2026-10-22","[\"DSV\",\"4974\",\"298506\"]":"2026-10-23","[\"DSV\",\"4974\",\"298422\"]":"2026-10-23","[\"DSV\",\"4974\",\"298485\"]":"2026-10-23","[\"DSV\",\"4974\",\"298484\"]":"2026-10-23","[\"DSV\",\"4974\",\"298539\"]":"2026-10-23","[\"DSV\",\"4974\",\"298542\"]":"2026-10-24","[\"DSV\",\"4974\",\"298579\"]":"2026-10-24","[\"DSV\",\"4974\",\"298573\"]":"2026-10-24","[\"DSV\",\"4974\",\"298636\"]":"2026-10-26","[\"DSV\",\"4974\",\"298599\"]":"2026-10-26","[\"DSV\",\"4974\",\"298668\"]":"2026-10-27","[\"DSV\",\"4974\",\"298698\"]":"2026-10-27","[\"DSV\",\"4974\",\"298715\"]":"2026-10-27","[\"DSV\",\"4974\",\"298716\"]":"2026-10-27","[\"DSV\",\"4974\",\"298650\"]":"2026-10-27","[\"DSV\",\"4974\",\"298657\"]":"2026-10-27","[\"DSV\",\"4974\",\"298709\"]":"2026-10-27","[\"DSV\",\"4974\",\"298713\"]":"2026-10-27","[\"DSV\",\"4974\",\"298639\"]":"2026-10-27","[\"DSV\",\"4974\",\"298631\"]":"2026-10-27","[\"DSV\",\"4974\",\"298640\"]":"2026-10-27","[\"DSV\",\"4974\",\"298659\"]":"2026-10-27","[\"DSV\",\"4974\",\"298724\"]":"2026-10-28","[\"DSV\",\"4974\",\"298719\"]":"2026-10-28","[\"DSV\",\"4974\",\"298734\"]":"2026-10-28","[\"DSV\",\"4974\",\"298732\"]":"2026-10-28","[\"DSV\",\"4974\",\"298740\"]":"2026-10-28","[\"DSV\",\"4974\",\"298745\"]":"2026-10-28","[\"DSV\",\"4974\",\"298708\"]":"2026-10-28","[\"DSV\",\"4974\",\"298793\"]":"2026-10-28","[\"DSV\",\"4974\",\"298805\"]":"2026-10-28","[\"DSV\",\"4974\",\"298810\"]":"2026-10-28","[\"DSV\",\"4974\",\"298812\"]":"2026-10-28","[\"DSV\",\"4974\",\"298767\"]":"2026-10-28","[\"DSV\",\"4974\",\"298798\"]":"2026-10-28","[\"DSV\",\"4974\",\"298811\"]":"2026-10-29","[\"DSV\",\"4974\",\"298836\"]":"2026-10-29","[\"DSV\",\"4974\",\"298848\"]":"2026-10-29","[\"DSV\",\"4974\",\"298935\"]":"2026-10-30","[\"DSV\",\"4974\",\"298947\"]":"2026-10-30","[\"DSV\",\"4974\",\"298937\"]":"2026-10-30","[\"DSV\",\"4974\",\"298927\"]":"2026-10-30","[\"DSV\",\"4974\",\"298865\"]":"2026-10-30","[\"DSV\",\"4974\",\"298871\"]":"2026-10-30","[\"DSV\",\"4974\",\"298963\"]":"2026-10-30","[\"DSV\",\"4974\",\"298891\"]":"2026-10-30","[\"DSV\",\"4974\",\"298973\"]":"2026-10-31","[\"DSV\",\"4974\",\"298982\"]":"2026-10-31","[\"DSV\",\"4974\",\"298980\"]":"2026-10-31","[\"DSV\",\"4974\",\"298984\"]":"2026-10-31","[\"DSV\",\"4974\",\"299010\"]":"2026-10-31","[\"DSV\",\"4974\",\"299065\"]":"2026-11-02","[\"DSV\",\"4974\",\"299076\"]":"2026-11-03","[\"DSV\",\"4974\",\"299107\"]":"2026-11-03","[\"DSV\",\"4974\",\"299141\"]":"2026-11-04","[\"DSV\",\"4974\",\"299140\"]":"2026-11-04","[\"DSV\",\"4974\",\"299139\"]":"2026-11-04","[\"DSV\",\"4974\",\"299156\"]":"2026-11-04","[\"DSV\",\"4974\",\"299180\"]":"2026-11-04","[\"DSV\",\"4974\",\"299146\"]":"2026-11-04","[\"DSV\",\"4974\",\"299167\"]":"2026-11-04","[\"DSV\",\"4974\",\"299194\"]":"2026-11-05","[\"DSV\",\"4974\",\"299195\"]":"2026-11-05","[\"DSV\",\"4974\",\"299193\"]":"2026-11-05","[\"DSV\",\"4974\",\"299222\"]":"2026-11-05","[\"DSV\",\"4974\",\"299305\"]":"2026-11-06","[\"DSV\",\"4974\",\"299327\"]":"2026-11-07","[\"DSV\",\"4974\",\"299340\"]":"2026-11-07","[\"DSV\",\"4974\",\"299342\"]":"2026-11-07","[\"DSV\",\"4974\",\"299353\"]":"2026-11-07","[\"DSV\",\"4974\",\"299401\"]":"2026-11-10","[\"DSV\",\"4974\",\"299470\"]":"2026-11-10","[\"DSV\",\"4974\",\"299481\"]":"2026-11-10","[\"DSV\",\"4974\",\"299424\"]":"2026-11-10","[\"DSV\",\"4974\",\"299499\"]":"2026-11-11","[\"DSV\",\"4974\",\"299501\"]":"2026-11-11","[\"DSV\",\"4974\",\"299506\"]":"2026-11-11","[\"DSV\",\"4974\",\"299514\"]":"2026-11-11","[\"DSV\",\"4974\",\"299536\"]":"2026-11-11","[\"DSV\",\"4974\",\"299454\"]":"2026-11-11","[\"DSV\",\"4974\",\"299560\"]":"2026-11-12","[\"DSV\",\"4974\",\"299548\"]":"2026-11-12","[\"DSV\",\"4974\",\"299603\"]":"2026-11-12","[\"DSV\",\"4974\",\"299615\"]":"2026-11-13","[\"DSV\",\"4974\",\"299673\"]":"2026-11-13","[\"DSV\",\"4974\",\"299679\"]":"2026-11-13","[\"DSV\",\"4974\",\"299699\"]":"2026-11-14","[\"DSV\",\"4974\",\"299711\"]":"2026-11-14","[\"DSV\",\"4974\",\"299702\"]":"2026-11-14","[\"DSV\",\"4974\",\"299754\"]":"2026-11-16","[\"DSV\",\"4974\",\"299751\"]":"2026-11-16","[\"DSV\",\"4974\",\"299747\"]":"2026-11-16","[\"DSV\",\"4974\",\"299759\"]":"2026-11-16","[\"DSV\",\"4974\",\"299757\"]":"2026-11-16","[\"DSV\",\"4974\",\"299738\"]":"2026-11-16","[\"DSV\",\"4974\",\"299829\"]":"2026-11-17","[\"DSV\",\"4974\",\"299833\"]":"2026-11-17","[\"DSV\",\"4974\",\"299821\"]":"2026-11-17","[\"DSV\",\"4974\",\"299843\"]":"2026-11-18","[\"DSV\",\"4974\",\"299837\"]":"2026-11-18","[\"DSV\",\"4974\",\"299840\"]":"2026-11-18","[\"DSV\",\"4974\",\"299847\"]":"2026-11-18","[\"DSV\",\"4974\",\"299849\"]":"2026-11-18","[\"DSV\",\"4974\",\"299862\"]":"2026-11-18","[\"DSV\",\"4974\",\"299903\"]":"2026-11-18","[\"DSV\",\"4974\",\"299873\"]":"2026-11-18","[\"DSV\",\"4974\",\"299905\"]":"2026-11-18"};
+function issueDocDates(visit){
+  const dates=[...new Set((visit.cargo??[]).map(row=>row.docDate).filter(Boolean))].sort();
+  return dates.length?dates.join(', '):originalMovementDocDates[operationKey(visit)]??'';
+}
 let combinedIssueRows=[];
 function combinedPayrollIssues(visits){
   return visits.filter(visit=>!operationPublication(visit)?.complete).map(visit=>{
@@ -2282,11 +2293,11 @@ el('combinedTimeline').addEventListener('click',async event=>{
   const timestamp=value=>String(value??'').replace('T',' ');
   const sheets=[['L','Loading'],['U','Unloading']].map(([direction,label])=>[label,[
     [label+' · Payroll Issues'],
-    ['Customer','Job','Dept Reg No.','Vehicle','Operation','Start','Finish','Issue EPF','Reason'],
+    ['Customer','Job','Doc Date','Dept Reg No.','Vehicle','Operation','Start','Finish','Issue EPF','Reason'],
     ...rows.filter(({visit})=>visit.direction===direction)
       .sort((a,b)=>a.visit.start.localeCompare(b.visit.start))
       .flatMap(({visit,issues})=>issues.map(({epf,reason})=>[
-        visit.customer,String(visit.job),String(visit.reg),visit.vehicle,label,timestamp(visit.start),timestamp(visit.end),epf,reason
+        visit.customer,String(visit.job),issueDocDates(visit),String(visit.reg),visit.vehicle,label,timestamp(visit.start),timestamp(visit.end),epf,reason
       ]))
   ]]);
   const status=button.parentElement.querySelector('.combined-export-status');
@@ -2325,9 +2336,10 @@ function renderCombinedTimeline(visits,selected){
   if(key===combinedTimelineKey)return;
   combinedTimelineKey=key;
   const crewBar=row=>{
-    const {dayPercent:day,otPercent:ot,label}=shiftBreakdown(row.day,row.ot);
-    return `<div class="combined-track" role="img" aria-label="${label}" title="${label}">
-      <div class="combined-fill"><i style="width:${day}%">${day>=12?day+'%':''}</i><i style="width:${ot}%">${ot>=12?ot+'%':''}</i></div></div>`;
+    const {dayPercent:day,otPercent:ot}=shiftBreakdown(row.day,row.ot);
+    const otFirst=`OT ${duration(row.ot)} · ${ot}% | Day ${duration(row.day)} · ${day}%`;
+    return `<div class="combined-bar-tooltip" tabindex="0" aria-label="${otFirst}"><div class="combined-track" aria-hidden="true">
+      <div class="combined-fill"><i style="width:${day}%">${day>=12?day+'%':''}</i><i style="width:${ot}%">${ot>=12?ot+'%':''}</i></div></div><span aria-hidden="true">${otFirst}</span></div>`;
   };
   const value=(type,amount)=>amount===null?'—':`<span data-combined-type="${type}" data-combined-value="${amount}"></span>`;
   const cells=row=>[
@@ -2340,7 +2352,7 @@ function renderCombinedTimeline(visits,selected){
     <table class="combined-table"><thead><tr><th scope="col">Role</th><th scope="col">Crew Hours</th><th scope="col">Day Hours</th><th scope="col">Day Value</th><th scope="col">OT Hours</th><th scope="col">OT Value</th><th scope="col">Total Hours</th><th scope="col">Total Value</th></tr></thead>
     <tbody>${roles.map(row=>`<tr><th scope="row">${row.role}</th>
       <td>${crewBar(row)}</td>${cells(row)}</tr>`).join('')}</tbody>
-    <tfoot><tr><th scope="row" colspan="2">Total Crew <span class="combined-staff">Sup ${staffCounts[0]} · Tally ${staffCounts[1]} · Opr ${staffCounts[2]}</span></th>${cells(total)}</tr></tfoot></table></div>
+    <tfoot><tr><th scope="row" colspan="2">Total Crew <span class="combined-staff">Supervisor ${staffCounts[0]} · Tally ${staffCounts[1]} · Operator ${staffCounts[2]}</span></th>${cells(total)}</tr></tfoot></table></div>
     <div class="combined-notes">${notes}</div>`;
   section.querySelector('.combined-notes').dataset.markup=notes;
   const amounts=[...section.querySelectorAll('[data-combined-value]')];
@@ -2558,6 +2570,7 @@ function parseMovementRows(rows){
   const header=rows.findIndex(row=>fields.every(field=>row.includes(field)));
   if(header<0)throw new Error('The Details sheet is missing required movement columns.');
   const columns=Object.fromEntries(fields.map(field=>[field,rows[header].indexOf(field)]));
+  const docDateColumn=rows[header].indexOf('Doc Date');
   const groups=new Map();
   const months=['jan','feb','mar','apr','may','jun','jul','aug','sep','oct','nov','dec'];
   function timestamp(value){
@@ -2607,7 +2620,12 @@ function parseMovementRows(rows){
       if(!Number.isFinite(value))throw new Error('Invalid '+field+' at row '+(index+1));
       return Math.abs(value);
     };
-    operation.cargo.push({tally:get('Tally #'),reference:get('Destination'),document:get('Doc No'),
+    let docDate='';
+    const rawDocDate=String(row[docDateColumn]??'').trim();
+    if(rawDocDate){
+      try{docDate=/^\d{4}-\d{2}-\d{2}$/.test(rawDocDate)?rawDocDate:timestamp(rawDocDate).slice(0,10);}catch{}
+    }
+    operation.cargo.push({tally:get('Tally #'),reference:get('Destination'),document:get('Doc No'),docDate,
       pcs:quantity('Inners'),cartons:quantity('Packs'),cbm:quantity('Volume')});
   }
   if(!groups.size)throw new Error('No vehicle operations found.');
