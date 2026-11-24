@@ -2388,7 +2388,8 @@ function renderCombinedTimeline(visits,selected){
   ].map(([minutes,cents])=>`<td><strong>${value('time',minutes)}</strong></td><td><small>${value('cost',row.priced?cents:null)}</small></td>`).join('');
   section.innerHTML=`<div class="combined-heading"><h2 id="combinedHeading">Loading &amp; Unloading · Combined Operations &amp; Labour Hours</h2></div>
     <div class="combined-kpis"><div>Vehicle Operations <strong>${value('count',visits.length)}</strong></div>
-    <div>Total Vehicle Duration <strong>${value('time',elapsed)}</strong></div></div>
+    <div>Total Vehicle Duration <strong>${value('time',elapsed)}</strong></div>
+    <div>Total Labour Hours <strong>${value('time',total.day+total.ot)}</strong></div></div>
     <div class="combined-scroll" tabindex="0" aria-label="Crew hours and payroll costs">
     <table class="combined-table"><thead><tr><th scope="col">Role</th><th scope="col">Crew Hours</th><th scope="col">Day Hours</th><th scope="col">Day Value</th><th scope="col">OT Hours</th><th scope="col">OT Value</th><th scope="col">Total Hours</th><th scope="col">Total Value</th></tr></thead>
     <tbody>${roles.map(row=>`<tr><th scope="row">${row.role}</th>
