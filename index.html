@@ -756,6 +756,28 @@ button,input,select,textarea,::file-selector-button{font-family:inherit}
   .job-header-actions > :is(.header-scope,#payrollSession,#payrollSignIn,#payrollSignOut){margin-bottom:34px}
 }
 @media(max-width:720px){.costing-report-links a{min-height:40px}}
+
+#combinedTimeline[hidden]{display:none}
+#combinedTimeline{max-width:900px;margin:0 auto 10px;background:#fff;border:1px solid #d2e0eb;border-radius:8px;overflow:hidden;color:#142844}
+.combined-heading{background:linear-gradient(112deg,#0c223e,#173e60 75%,#145c65);color:white;padding:6px 10px}
+.combined-heading h2{margin:0;font-size:.9rem}
+.combined-kpis{display:flex;flex-wrap:wrap;gap:5px;padding:6px 8px}
+.combined-kpis div{flex:1 1 140px;display:flex;justify-content:space-between;gap:8px;background:#edf4fa;border-radius:4px;padding:4px 7px;font-size:.76rem}
+.combined-scroll{overflow-x:auto}
+.combined-table{width:100%;min-width:525px;border-collapse:collapse;font-size:.74rem;font-variant-numeric:tabular-nums;white-space:nowrap}
+.combined-table :is(th,td){padding:4px 8px;text-align:right}
+.combined-table th:first-child{text-align:left}
+.combined-table thead{background:#eaf2f9;color:#25445f}
+.combined-table tbody tr:nth-child(even){background:#f4f8fc}
+.combined-table td small{display:block;font-size:.68rem}
+.combined-table tbody td:nth-child(3){color:#12634f}
+.combined-table tbody td:nth-child(4){color:#8c480b}
+.combined-table tfoot{background:#112a43;color:white;font-weight:700}
+.combined-track{min-width:55px;height:8px;background:#e4edf3;border-radius:8px;overflow:hidden}
+.combined-fill{width:100%;height:100%;display:flex;transform-origin:left}
+.combined-fill i:first-child{background:#187e67}
+.combined-fill i:last-child{background:#db983f}
+.combined-note{margin:4px 8px;color:#465c71;font-size:.7rem}
 </style>
 <header class="dashboard-header"><div class="job-header-actions"><div class="header-scope"><label><span>Customer</span><select id="customer"></select></label>
 <label><span>Job</span><select id="job"></select></label></div><div class="costing-report-links"><button id="openCosts" type="button" aria-haspopup="dialog"><svg class="ui-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" aria-hidden="true"><rect x="5" y="3" width="14" height="18" rx="2"/><path d="M8 8h8m-8 4h2m4 0h2m-8 4h2m4 0h2"/></svg>Job Costing</button><a href="./labour-report.html">Labour Report</a></div><p id="payrollSession" role="status"></p><button id="payrollSignIn" type="button">Payroll sign in</button><button id="payrollSignOut" type="button" hidden>Sign out</button></div><div class="dashboard-title"><img class="gtl-header-logo" src="./logo-header.png?v=golden-cost-logo" width="512" height="460" alt="GTL Job Costing"><div><p class="dashboard-brand">Global Transportation and PVT LTD</p><h1>Warehouse Operations &amp; Job Costing</h1><small>Vehicle turnaround, crew hours and job costs</small></div></div>
@@ -773,6 +795,7 @@ button,input,select,textarea,::file-selector-button{font-family:inherit}
 <main>
 <p id="range" class="muted" aria-live="polite"></p>
 <section id="monthlyCosts" aria-labelledby="monthlyCostsHeading" hidden></section>
+<section id="combinedTimeline" aria-labelledby="combinedHeading" hidden></section>
 <section id="cards" class="cards" aria-label="Operations summary"></section>
 <p class="mobile-chart-hint" id="mobileChartHint">Swipe sideways to see more charts</p>
 <section class="chart-grid" id="charts" aria-label="Operations charts" tabindex="0" aria-describedby="mobileChartHint"></section>
@@ -1168,6 +1191,7 @@ function render(animate=true) {
   }
   previousCardsMarkup=cardsMarkup;
   renderMonthlyCosts(selected);
+  renderCombinedTimeline(rows,selected);
   for(const d of directions)renderVisitCost(selected,rows.filter(o=>o.direction===d),d);
   fitKpiValues();
   if(animate)animateCostCards(JSON.stringify([el('customer').value,el('job').value,from,to,direction,kind,selected?.id]));
@@ -1210,6 +1234,7 @@ el('kind').addEventListener('change',()=>{
 });
 el('reset').addEventListener('click',()=>{
   monthlyCostKey=undefined;
+  combinedTimelineKey=undefined;
   for(const id of ['monthFilter','week','direction','kind','vehicle'])el(id).value='';
   el('monthFilter').value=defaultDashboardMonth;
   const period=monthBounds(el('monthFilter').value);
@@ -2129,6 +2154,79 @@ function applyPublishedLabour(data){
   for(const {month,totals} of data??[]){
     for(const item of totals)publishedLabour.set(JSON.stringify([month,item.customer,item.job]),new Map(item.operationCosts.map(entry=>[entry.id,entry])));
   }
+}
+let combinedTimelineKey;
+function combinedTimelineSummary(visits){
+  const roles=crewRoles.map(([role,field])=>({role,field,day:0,ot:0,dayCents:0,otCents:0,priced:false}));
+  let partial=false;
+  for(const visit of visits){
+    const publication=operationPublication(visit);
+    const time=splitWorkingMinutes(visit.start,visit.end);
+    if(!publication?.complete)partial=true;
+    for(const item of roles){
+      const count=new Set((visit[item.field]??[]).map(payrollEpf).filter(epf=>epf&&epf!=='0')).size;
+      const published=publication?.roles?.find(row=>row.role===item.role);
+      item.day+=time&&count?time.day*count:published?.dayMinutes??0;
+      item.ot+=time&&count?time.ot*count:published?.otMinutes??0;
+      if(!published||!knownAmount(published.dayCost)||!knownAmount(published.otCost))continue;
+      item.priced=true;
+      item.dayCents+=Math.round(published.dayCost*100);
+      item.otCents+=Math.round(published.otCost*100);
+    }
+  }
+  const total=roles.reduce((sum,item)=>({
+    day:sum.day+item.day,ot:sum.ot+item.ot,dayCents:sum.dayCents+item.dayCents,
+    otCents:sum.otCents+item.otCents,priced:sum.priced||item.priced
+  }),{day:0,ot:0,dayCents:0,otCents:0,priced:false});
+  return {roles,total,partial};
+}
+function renderCombinedTimeline(visits,selected){
+  const section=el('combinedTimeline');
+  if(selected||!showAreaForJobScope()||!visits.length){
+    section.hidden=true;
+    combinedTimelineKey=undefined;
+    return;
+  }
+  const {roles,total,partial}=combinedTimelineSummary(visits);
+  const elapsed=sum(visits,'minutes');
+  const key=JSON.stringify([el('customer').value,el('job').value,from,to,el('direction').value,el('kind').value,visits.length,elapsed,roles,partial]);
+  section.hidden=false;
+  if(key===combinedTimelineKey)return;
+  combinedTimelineKey=key;
+  const max=Math.max(1,...roles.map(row=>row.day+row.ot));
+  const value=(type,amount)=>amount===null?'—':`<span data-combined-type="${type}" data-combined-value="${amount}"></span>`;
+  const cells=row=>[
+    [row.day,row.dayCents],[row.ot,row.otCents],[row.day+row.ot,row.dayCents+row.otCents]
+  ].map(([minutes,cents])=>`<td><strong>${value('time',minutes)}</strong><small>${value('cost',row.priced?cents:null)}</small></td>`).join('');
+  section.innerHTML=`<div class="combined-heading"><h2 id="combinedHeading">Combined Operations &amp; Labour Hours</h2></div>
+    <div class="combined-kpis"><div>Vehicle Operations <strong>${value('count',visits.length)}</strong></div>
+    <div>Total Vehicle Duration <strong>${value('time',elapsed)}</strong></div></div>
+    <div class="combined-scroll" tabindex="0" aria-label="Crew hours and payroll costs">
+    <table class="combined-table"><thead><tr><th scope="col">Role</th><th scope="col">Crew Hours</th><th scope="col">Day</th><th scope="col">OT</th><th scope="col">Total</th></tr></thead>
+    <tbody>${roles.map(row=>`<tr><th scope="row">${row.role}</th>
+      <td><div class="combined-track" aria-hidden="true"><div class="combined-fill"><i style="width:${100*row.day/max}%"></i><i style="width:${100*row.ot/max}%"></i></div></div></td>${cells(row)}</tr>`).join('')}</tbody>
+    <tfoot><tr><th scope="row" colspan="2">Total Crew</th>${cells(total)}</tr></tfoot></table></div>
+    ${partial?'<p class="combined-note">Known published payroll costs only. Some operations have incomplete costing.</p>':''}`;
+  const amounts=[...section.querySelectorAll('[data-combined-value]')];
+  const bars=[...section.querySelectorAll('.combined-fill')];
+  function paint(progress){
+    for(const node of amounts){
+      const number=Number(node.dataset.combinedValue)*progress;
+      node.textContent=node.dataset.combinedType==='time'?duration(number):
+        node.dataset.combinedType==='cost'?money(Math.round(number)/100):fmt(Math.round(number));
+    }
+    for(const bar of bars)bar.style.transform=`scaleX(${progress})`;
+  }
+  if(window.matchMedia('(prefers-reduced-motion: reduce)').matches){paint(1);return;}
+  paint(0);
+  const start=performance.now();
+  function frame(now){
+    if(section.hidden||!amounts[0].isConnected)return;
+    const progress=Math.min(1,Math.max(0,(now-start)/300));
+    paint(progress);
+    if(progress<1)requestAnimationFrame(frame);
+  }
+  requestAnimationFrame(frame);
 }
 function publishedRoleTable(visits,showVehicleCrew=false){
   if(!visits.length)return '';
