@@ -914,6 +914,22 @@ html.guest-dashboard :is(#openCosts,.costing-report-links,#monthlyCosts,#combine
 #payrollLogin #staffContinuePublic{grid-column:2;background:#173e60;color:#fff;border:1px solid #173e60}
 #payrollLogin #staffContinuePublic:hover{background:#102a43}
 #payrollLogin .staff-login-actions button:focus-visible{outline:2px solid #087b83;outline-offset:2px}
+
+.dashboard-header + main{width:100%;max-width:none;padding-inline:clamp(8px,2vw,32px)}
+#payrollLogin .staff-login-brand img{flex:0 0 34px}
+.staff-brand-copy{min-width:0}
+#payrollLogin .staff-brand-copy strong{display:block;overflow-wrap:anywhere}
+#payrollLogin,#staffWelcome{max-height:calc(100dvh - 24px);overflow-y:auto}
+#payrollLogin #staffPasswordForm > label:not(.staff-remember),
+#payrollLogin #staffSetupForm > label{display:grid;gap:4px}
+#payrollLogin input:is([type=email],[type=password]){min-width:0}
+@media(max-width:620px){
+  #payrollLogin input:is([type=email],[type=password]){font-size:16px}
+  #payrollLogin .staff-login-brand{padding:9px 12px}
+  #payrollLogin .staff-login-panel{padding:12px}
+  #staffWelcome{padding:16px}
+  #staffWelcomeName{overflow-wrap:anywhere}
+}
 </style>
 <header class="dashboard-header"><div class="job-header-actions"><div class="header-scope"><label><span>Customer</span><select id="customer"></select></label>
 <label><span>Job</span><select id="job"></select></label></div><div class="costing-report-links"><button id="openCosts" type="button" aria-haspopup="dialog"><svg class="ui-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" aria-hidden="true"><rect x="5" y="3" width="14" height="18" rx="2"/><path d="M8 8h8m-8 4h2m4 0h2m-8 4h2m4 0h2"/></svg>Job Costing</button><a href="./labour-report.html">Labour Report</a></div><p id="payrollSession" role="status"></p><button id="payrollSignIn" type="button">Management Login</button><button id="payrollSignOut" type="button" hidden>Sign out</button></div><div class="dashboard-title"><img class="gtl-header-logo" src="./logo-header.png?v=golden-cost-logo" width="512" height="460" alt="GTL Job Costing"><div><p class="dashboard-brand">Global Transportation and PVT LTD</p><h1>Warehouse Operations &amp; Job Costing</h1><small>Vehicle turnaround, crew hours and job costs</small></div></div>
@@ -947,7 +963,7 @@ html.guest-dashboard :is(#openCosts,.costing-report-links,#monthlyCosts,#combine
 
 <dialog id="payrollLogin" aria-labelledby="staffLoginHeading">
 <section class="staff-login-brand"><img src="./logo-header.png?v=golden-cost-logo" alt="GTL">
-<p>Global Park</p><strong>Warehouse Operations<br>&amp; Job Costing</strong></section>
+<div class="staff-brand-copy"><p>Global Park</p><strong>Warehouse Operations &amp; Job Costing</strong></div></section>
 <div class="staff-login-panel">
 <form method="dialog"><button class="close" aria-label="Close sign-in">Close</button></form>
 <h2 id="staffLoginHeading">Management Login</h2>
@@ -3101,6 +3117,17 @@ for(const id of ['payrollLogin','staffWelcome']){
     if(document.documentElement.classList.contains('staff-entry'))event.preventDefault();
   });
 }
+const touchDashboard=window.matchMedia('(hover: none) and (pointer: coarse)');
+function dashboardHaptic(){
+  if(touchDashboard.matches&&typeof navigator.vibrate==='function')navigator.vibrate(12);
+}
+document.addEventListener('click',event=>{
+  const control=event.target.closest('.dashboard-header button:enabled, main button:enabled, main summary, #costSettings button:enabled');
+  if(control&&event.isTrusted)dashboardHaptic();
+});
+document.addEventListener('change',event=>{
+  if(event.isTrusted&&event.target.matches('.dashboard-header select, .dashboard-header input, main select, #costSettings select'))dashboardHaptic();
+});
 el('staffContinuePublic').addEventListener('click',async()=>{
   if(staffBusy)return;
   if(verifiedStaffUid&&payrollClient){
