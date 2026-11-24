@@ -906,6 +906,14 @@ html.guest-dashboard :is(#openCosts,.costing-report-links,#monthlyCosts,#combine
 #payrollLogin input[aria-invalid="true"]{border-color:#cd7980}
 #payrollLogin .staff-reset-action{margin:8px 0 0;text-align:right}
 #payrollLogin .staff-reset-action button:not([hidden]){width:auto;background:transparent;color:#086670;border:0;box-shadow:none;padding:3px 0;text-decoration:underline;font-size:13px}
+
+#payrollLogin .staff-login-actions{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:8px}
+#payrollLogin .staff-login-actions button{width:100%;min-height:36px;margin:0;font-weight:700;line-height:1.2}
+#payrollLogin #staffNewUser{background:#087b83;color:#fff;border:1px solid #087b83}
+#payrollLogin #staffNewUser:hover{background:#086670}
+#payrollLogin #staffContinuePublic{grid-column:2;background:#173e60;color:#fff;border:1px solid #173e60}
+#payrollLogin #staffContinuePublic:hover{background:#102a43}
+#payrollLogin .staff-login-actions button:focus-visible{outline:2px solid #087b83;outline-offset:2px}
 </style>
 <header class="dashboard-header"><div class="job-header-actions"><div class="header-scope"><label><span>Customer</span><select id="customer"></select></label>
 <label><span>Job</span><select id="job"></select></label></div><div class="costing-report-links"><button id="openCosts" type="button" aria-haspopup="dialog"><svg class="ui-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" aria-hidden="true"><rect x="5" y="3" width="14" height="18" rx="2"/><path d="M8 8h8m-8 4h2m4 0h2m-8 4h2m4 0h2"/></svg>Job Costing</button><a href="./labour-report.html">Labour Report</a></div><p id="payrollSession" role="status"></p><button id="payrollSignIn" type="button">Management Login</button><button id="payrollSignOut" type="button" hidden>Sign out</button></div><div class="dashboard-title"><img class="gtl-header-logo" src="./logo-header.png?v=golden-cost-logo" width="512" height="460" alt="GTL Job Costing"><div><p class="dashboard-brand">Global Transportation and PVT LTD</p><h1>Warehouse Operations &amp; Job Costing</h1><small>Vehicle turnaround, crew hours and job costs</small></div></div>
