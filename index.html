@@ -1,5 +1,5 @@
 <!doctype html>
-<html lang="en">
+<html lang="en" class="staff-entry">
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
 <meta name="theme-color" content="#112741">
@@ -832,6 +832,8 @@ button,input,select,textarea,::file-selector-button{font-family:inherit}
 #staffVerifySlider::-moz-range-thumb{width:18px;height:18px;border-radius:50%;background:#08764a;border:2px solid white}
 #staffWelcome{width:min(480px,94vw);text-align:center;border-top:5px solid #087b83}
 #staffWelcome p{font-weight:700}
+html.staff-entry :is(.dashboard-header,main,.dashboard-credit){visibility:hidden}
+html.staff-entry #payrollLogin .close{display:none}
 </style>
 <header class="dashboard-header"><div class="job-header-actions"><div class="header-scope"><label><span>Customer</span><select id="customer"></select></label>
 <label><span>Job</span><select id="job"></select></label></div><div class="costing-report-links"><button id="openCosts" type="button" aria-haspopup="dialog"><svg class="ui-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" aria-hidden="true"><rect x="5" y="3" width="14" height="18" rx="2"/><path d="M8 8h8m-8 4h2m4 0h2m-8 4h2m4 0h2"/></svg>Job Costing</button><a href="./labour-report.html">Labour Report</a></div><p id="payrollSession" role="status"></p><button id="payrollSignIn" type="button">Staff Sign In</button><button id="payrollSignOut" type="button" hidden>Sign out</button></div><div class="dashboard-title"><img class="gtl-header-logo" src="./logo-header.png?v=golden-cost-logo" width="512" height="460" alt="GTL Job Costing"><div><p class="dashboard-brand">Global Transportation and PVT LTD</p><h1>Warehouse Operations &amp; Job Costing</h1><small>Vehicle turnaround, crew hours and job costs</small></div></div>
@@ -2785,6 +2787,23 @@ const pilotStaffEmail='sandun.jayaweera123@gmail.com';
 const pilotStaffUid='2f2106c8-8a76-47dc-8d6e-e7b7d7ba9f39';
 let verifiedStaffUid='', staffBusy=false;
 const staffEmailKey='gtl-staff-last-email';
+const staffSetupKey='gtl-staff-setup-pending';
+let staffWelcomePending=false;
+function revealDashboard(){
+  document.documentElement.classList.remove('staff-entry');
+}
+function holdDashboard(){
+  document.documentElement.classList.add('staff-entry');
+}
+function markStaffSetup(pending){
+  try{
+    if(pending)localStorage.setItem(staffSetupKey,'1');
+    else localStorage.removeItem(staffSetupKey);
+  }catch{}
+}
+function staffSetupPending(){
+  try{return localStorage.getItem(staffSetupKey)==='1';}catch{return false;}
+}
 function setStaffStage(stage){
   el('staffPasswordForm').hidden=stage!=='email';
   el('payrollLoginForm').hidden=stage!=='email';
@@ -2794,6 +2813,8 @@ function rememberStaffEmail(email){
   try{localStorage.setItem(staffEmailKey,email);}catch{}
 }
 function openStaffWelcome(){
+  staffWelcomePending=true;
+  holdDashboard();
   el('payrollLogin').close();
   el('staffWelcome').showModal();
 }
@@ -2812,7 +2833,7 @@ async function runStaffAction(action){
   try{await action(status);}catch(error){status.textContent=error.message;}
   finally{staffBusy=false;}
 }
-el('payrollSignIn').addEventListener('click',()=>{
+function showStaffEntry(){
   let saved='';
   try{saved=localStorage.getItem(staffEmailKey)||'';}catch{}
   const suggestions=[...new Set([saved,pilotStaffEmail].filter(Boolean))];
@@ -2820,9 +2841,28 @@ el('payrollSignIn').addEventListener('click',()=>{
   el('payrollEmail').value=saved;
   el('payrollLoginStatus').textContent='';
   setStaffStage('email');
-  el('payrollLogin').showModal();
+  if(!el('payrollLogin').open)el('payrollLogin').showModal();
+}
+el('payrollSignIn').addEventListener('click',showStaffEntry);
+el('staffWelcome').addEventListener('close',()=>{
+  staffWelcomePending=false;
+  revealDashboard();
 });
-el('staffContinuePublic').addEventListener('click',()=>el('payrollLogin').close());
+for(const id of ['payrollLogin','staffWelcome']){
+  el(id).addEventListener('cancel',event=>{
+    if(document.documentElement.classList.contains('staff-entry'))event.preventDefault();
+  });
+}
+el('staffContinuePublic').addEventListener('click',async()=>{
+  if(staffBusy)return;
+  if(verifiedStaffUid&&payrollClient){
+    const {error}=await payrollClient.auth.signOut({scope:'local'});
+    if(error){el('payrollLoginStatus').textContent=error.message;return;}
+    verifiedStaffUid='';
+  }
+  revealDashboard();
+  el('payrollLogin').close();
+});
 el('payrollLogin').addEventListener('close',()=>{
   for(const id of ['staffPassword','staffNewPassword','staffConfirmPassword'])el(id).value='';
   if(verifiedStaffUid){
@@ -2842,7 +2882,7 @@ el('staffPasswordForm').addEventListener('submit',event=>{
     if(error)throw error;
     rememberStaffEmail(email);
     if(email===pilotStaffEmail){await requirePilotRole(data.user);openStaffWelcome();}
-    else el('payrollLogin').close();
+    else {revealDashboard();el('payrollLogin').close();}
   });
 });
 const verifySlider=el('staffVerifySlider');
@@ -2869,10 +2909,12 @@ async function finishStaffLink(){
   try{
     const {data,error}=await payrollClient.auth.getUser();
     if(error)throw error;
-    if(data.user?.id!==pilotStaffUid)return;
+    if(data.user?.id!==pilotStaffUid){revealDashboard();return;}
+    holdDashboard();
+    markStaffSetup(true);
+    verifiedStaffUid=data.user.id;
     if(!el('payrollLogin').open)el('payrollLogin').showModal();
     await requirePilotRole(data.user);
-    verifiedStaffUid=data.user.id;
     setStaffStage('password');
     status.textContent='Email verified. Set a password with at least 12 characters.';
     el('staffNewPassword').focus();
@@ -2893,6 +2935,7 @@ el('staffSetupForm').addEventListener('submit',event=>{
     const {error}=await payrollClient.auth.updateUser({password});
     if(error)throw error;
     verifiedStaffUid='';
+    markStaffSetup(false);
     rememberStaffEmail(pilotStaffEmail);
     openStaffWelcome();
   });
@@ -3352,16 +3395,28 @@ if(payrollClient){
   void refreshPublishedLabour();
   void refreshPublishedJobCosts();
   void refreshSharedAreas();
-  if(isStaffLinkReturn)void finishStaffLink();
   payrollClient.auth.onAuthStateChange((event,session)=>{
-    if(['INITIAL_SESSION','SIGNED_IN','SIGNED_OUT'].includes(event))
-      setTimeout(()=>setPayrollSession(session?.user??null),0);
+    if(!['INITIAL_SESSION','SIGNED_IN','SIGNED_OUT'].includes(event))return;
+    setTimeout(()=>{
+      const user=session?.user??null;
+      setPayrollSession(user);
+      if(event!=='INITIAL_SESSION')return;
+      if(isStaffLinkReturn||(user?.id===pilotStaffUid&&staffSetupPending())){
+        if(user)void finishStaffLink();
+        else showStaffEntry();
+      }else if(user){
+        revealDashboard();
+      }else if(!staffWelcomePending){
+        showStaffEntry();
+      }
+    },0);
   });
 }else{
   movementLoadState='error';
   el('movementLastUpload').textContent='Unavailable';
   render();
-  el('payrollSession').textContent='Payroll sign-in could not load.';
+  showStaffEntry();
+  el('payrollLoginStatus').textContent='Staff sign-in could not load. Public view is available.';
 }
 </script>
 
