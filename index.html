@@ -862,6 +862,26 @@ html.staff-entry{background:radial-gradient(ellipse at 75% 15%,#12616a 0%,#15365
   .staff-login-brand strong{font-size:1rem}
   .staff-login-panel{padding:15px 18px}
 }
+
+#payrollLogin{width:min(410px,calc(100vw - 24px));font:14px/1.35 system-ui,sans-serif}
+#payrollLogin[open]{display:block}
+#payrollLogin .staff-login-brand{display:flex;flex-direction:row;align-items:center;justify-content:flex-start;gap:10px;padding:10px 16px}
+#payrollLogin .staff-login-brand img{width:34px}
+#payrollLogin .staff-login-brand p{margin:0;font-size:11px}
+#payrollLogin .staff-login-brand strong{font-size:13px}
+#payrollLogin .staff-login-brand br{display:none}
+#payrollLogin .staff-login-panel{padding:14px 16px}
+#payrollLogin h2{font-size:17px}
+#payrollLogin :is(label,button,input){font-size:13px}
+#payrollLogin input:not([type=range]){width:100%;min-height:36px}
+#staffVerifySlider{height:32px;border:1px solid #b4c9da;border-radius:6px;padding:0}
+#staffVerifySlider::-webkit-slider-thumb{width:31px;height:30px;border-radius:5px;background:#08764a}
+#staffVerifySlider::-moz-range-thumb{width:29px;height:28px;border-radius:5px;background:#08764a}
+#staffVerifySlider:disabled{opacity:1;cursor:default}
+#payrollLogin .staff-keyboard-submit:not(:focus){position:absolute;width:1px;height:1px;margin:-1px;padding:0;overflow:hidden;clip-path:inset(50%);white-space:nowrap}
+#payrollLoginStatus{font-size:12px;margin:6px 0;color:#23525b}
+#payrollLogin .staff-login-actions{margin-top:10px}
+#payrollLogin .staff-login-actions button{padding:5px 9px;border-radius:5px;font-size:12px;box-shadow:none}
 </style>
 <header class="dashboard-header"><div class="job-header-actions"><div class="header-scope"><label><span>Customer</span><select id="customer"></select></label>
 <label><span>Job</span><select id="job"></select></label></div><div class="costing-report-links"><button id="openCosts" type="button" aria-haspopup="dialog"><svg class="ui-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" aria-hidden="true"><rect x="5" y="3" width="14" height="18" rx="2"/><path d="M8 8h8m-8 4h2m4 0h2m-8 4h2m4 0h2"/></svg>Job Costing</button><a href="./labour-report.html">Labour Report</a></div><p id="payrollSession" role="status"></p><button id="payrollSignIn" type="button">Staff Sign In</button><button id="payrollSignOut" type="button" hidden>Sign out</button></div><div class="dashboard-title"><img class="gtl-header-logo" src="./logo-header.png?v=golden-cost-logo" width="512" height="460" alt="GTL Job Costing"><div><p class="dashboard-brand">Global Transportation and PVT LTD</p><h1>Warehouse Operations &amp; Job Costing</h1><small>Vehicle turnaround, crew hours and job costs</small></div></div>
@@ -908,7 +928,7 @@ html.staff-entry{background:radial-gradient(ellipse at 75% 15%,#12616a 0%,#15365
 <form id="payrollLoginForm">
 <label>Slide right to verify your email
 <input id="staffVerifySlider" type="range" min="0" max="100" value="0" aria-label="Slide right to send sign-in link"></label>
-<button type="submit">Send sign-in link</button>
+<button type="submit" class="staff-keyboard-submit">Verify email</button>
 </form>
 <form id="staffSetupForm" hidden>
 <label>New password<input id="staffNewPassword" type="password" required minlength="12" autocomplete="new-password"></label>
@@ -2876,6 +2896,7 @@ async function runStaffAction(action){
   finally{staffBusy=false;}
 }
 function showStaffEntry(){
+  resetVerifySlider();
   let saved='';
   try{saved=localStorage.getItem(staffEmailKey)||'';}catch{}
   const suggestions=[...new Set([saved,pilotStaffEmail].filter(Boolean))];
@@ -2939,18 +2960,37 @@ verifySlider.addEventListener('input',()=>verifySlider.style.setProperty('--veri
 verifySlider.addEventListener('change',()=>{
   if(verifySlider.value==='100')el('payrollLoginForm').requestSubmit();
 });
+function resetVerifySlider(){
+  verifySlider.value='0';
+  verifySlider.disabled=false;
+  verifySlider.style.removeProperty('--verified-width');
+}
+el('payrollEmail').addEventListener('input',()=>{
+  if(staffBusy)return;
+  resetVerifySlider();
+  el('payrollLoginStatus').textContent='';
+});
 el('payrollLoginForm').addEventListener('submit',event=>{
   event.preventDefault();
+  if(staffBusy||verifySlider.disabled)return;
   const emailInput=el('payrollEmail');
-  verifySlider.value='0';
-  verifySlider.style.removeProperty('--verified-width');
-  if(!emailInput.reportValidity())return;
+  if(!emailInput.reportValidity()){resetVerifySlider();return;}
   void runStaffAction(async status=>{
     const email=emailInput.value.trim().toLowerCase();
     const redirect=new URL(location.pathname,location.origin);
-    const {error}=await payrollClient.auth.signInWithOtp({email,options:{shouldCreateUser:false,emailRedirectTo:redirect.href}});
-    if(error)throw error;
-    status.textContent='Open the sign-in link in your email to continue.';
+    verifySlider.disabled=true;
+    emailInput.readOnly=true;
+    status.textContent='Sending verification link…';
+    try{
+      const {error}=await payrollClient.auth.signInWithOtp({email,options:{shouldCreateUser:false,emailRedirectTo:redirect.href}});
+      if(error)throw error;
+      verifySlider.value='100';
+      verifySlider.style.setProperty('--verified-width','100%');
+      status.textContent='Verification link sent. Check your email.';
+    }catch(error){
+      resetVerifySlider();
+      throw error;
+    }finally{emailInput.readOnly=false;}
   });
 });
 async function finishStaffLink(){
