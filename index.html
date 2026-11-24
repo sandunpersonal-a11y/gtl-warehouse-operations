@@ -882,6 +882,22 @@ html.staff-entry{background:radial-gradient(ellipse at 75% 15%,#12616a 0%,#15365
 #payrollLoginStatus{font-size:12px;margin:6px 0;color:#23525b}
 #payrollLogin .staff-login-actions{margin-top:10px}
 #payrollLogin .staff-login-actions button{padding:5px 9px;border-radius:5px;font-size:12px;box-shadow:none}
+
+html.staff-entry body::before{content:"";position:fixed;inset:0;pointer-events:none;background:linear-gradient(105deg,transparent 28%,#b8f1f410 50%,transparent 72%);animation:staff-light 6s ease-in-out infinite}
+@keyframes staff-light{from{transform:translateX(-100%)}to{transform:translateX(100%)}}
+@media(prefers-reduced-motion:reduce){html.staff-entry body::before{animation:none;display:none}}
+#staffWelcome{font:14px/1.4 system-ui,sans-serif;width:min(420px,calc(100vw - 24px));padding:22px;border-radius:14px;box-shadow:0 20px 60px #07182866}
+#staffWelcome img{width:42px;height:auto}
+#staffWelcome h2{font-size:17px;margin:9px 0 4px}
+#staffWelcome p{margin:0 0 15px;color:#486278}
+#staffWelcome button{background:#087b83;color:#fff;border:1px solid #087b83;border-radius:7px;padding:8px 14px;font-size:13px}
+#payrollLogin .staff-remember{display:flex;align-items:center;gap:6px}
+#payrollLogin .staff-remember input{width:auto;min-height:0;accent-color:#087b83}
+html.guest-dashboard :is(#openCosts,.costing-report-links,#monthlyCosts,#combinedTimeline,#cards,#charts,#mobileChartHint,#movementUploadPanel,.monthly-export){display:none}
+#guestOvertime:not([hidden]){display:grid;grid-template-columns:repeat(auto-fit,minmax(min(100%,210px),1fr));gap:8px}
+#guestOvertime article{background:#fff;border:1px solid #dbe5ef;border-radius:7px;padding:10px 12px}
+#guestOvertime h2{font-size:.85rem;margin:0 0 4px}
+#guestOvertime strong{color:#8a500e}
 </style>
 <header class="dashboard-header"><div class="job-header-actions"><div class="header-scope"><label><span>Customer</span><select id="customer"></select></label>
 <label><span>Job</span><select id="job"></select></label></div><div class="costing-report-links"><button id="openCosts" type="button" aria-haspopup="dialog"><svg class="ui-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" aria-hidden="true"><rect x="5" y="3" width="14" height="18" rx="2"/><path d="M8 8h8m-8 4h2m4 0h2m-8 4h2m4 0h2"/></svg>Job Costing</button><a href="./labour-report.html">Labour Report</a></div><p id="payrollSession" role="status"></p><button id="payrollSignIn" type="button">Staff Sign In</button><button id="payrollSignOut" type="button" hidden>Sign out</button></div><div class="dashboard-title"><img class="gtl-header-logo" src="./logo-header.png?v=golden-cost-logo" width="512" height="460" alt="GTL Job Costing"><div><p class="dashboard-brand">Global Transportation and PVT LTD</p><h1>Warehouse Operations &amp; Job Costing</h1><small>Vehicle turnaround, crew hours and job costs</small></div></div>
@@ -897,6 +913,7 @@ html.staff-entry{background:radial-gradient(ellipse at 75% 15%,#12616a 0%,#15365
 </section>
 </header>
 <main>
+<section id="guestOvertime" hidden aria-label="Overtime summary"></section>
 <p id="range" class="muted" aria-live="polite"></p>
 <section id="monthlyCosts" aria-labelledby="monthlyCostsHeading" hidden></section>
 <section id="combinedTimeline" aria-labelledby="combinedHeading" hidden></section>
@@ -923,6 +940,7 @@ html.staff-entry{background:radial-gradient(ellipse at 75% 15%,#12616a 0%,#15365
 <datalist id="staffEmailSuggestions"></datalist>
 <form id="staffPasswordForm" hidden>
 <label>Password<input id="staffPassword" type="password" required autocomplete="current-password"></label>
+<label class="staff-remember"><input id="staffRemember" type="checkbox" checked> Remember me</label>
 <button type="submit">Sign in</button>
 </form>
 <form id="payrollLoginForm">
@@ -931,16 +949,17 @@ html.staff-entry{background:radial-gradient(ellipse at 75% 15%,#12616a 0%,#15365
 <button type="submit" class="staff-keyboard-submit">Verify email</button>
 </form>
 <form id="staffSetupForm" hidden>
-<label>New password<input id="staffNewPassword" type="password" required minlength="12" autocomplete="new-password"></label>
-<label>Confirm password<input id="staffConfirmPassword" type="password" required minlength="12" autocomplete="new-password"></label>
+<label>New password<input id="staffNewPassword" type="password" required minlength="6" autocomplete="new-password"></label>
+<label>Confirm password<input id="staffConfirmPassword" type="password" required minlength="6" autocomplete="new-password"></label>
 <button type="submit">Set password and sign in</button>
 </form>
 <p id="payrollLoginStatus" role="status"></p>
-<div class="staff-login-actions"><button type="button" id="staffContinuePublic">Continue as Public</button>
+<div class="staff-login-actions"><button type="button" id="staffContinuePublic">Continue as Guest</button>
 <button type="button" id="staffUsePassword">Already set a password?</button></div>
 </div></dialog>
 <dialog id="staffWelcome" aria-labelledby="staffWelcomeHeading">
-<h2 id="staffWelcomeHeading">Job Costing Management Dashboard</h2>
+<img src="./logo-header.png?v=golden-cost-logo" alt="GTL">
+<h2 id="staffWelcomeHeading">Welcome to GTL Job Costing Dashboard</h2>
 <p>Sandun Prasanna</p>
 <form method="dialog"><button type="submit">Continue to Dashboard</button></form>
 </dialog>
@@ -1265,6 +1284,15 @@ el('areaMasterFile').addEventListener('change',async event=>{
   }catch(error){status.textContent=error.message;}
   finally{input.value='';input.disabled=!canManagePayroll();}
 });
+function renderGuestOvertime(rows){
+  const cards=['L','U'].map(direction=>{
+    const matches=rows.filter(row=>row.direction===direction);
+    if(!matches.length)return '';
+    const times=matches.map(row=>splitWorkingMinutes(row.start,row.end)).filter(Boolean);
+    return `<article><h2>${operationName(direction)} OT Hours</h2><strong>${times.length?duration(sum(times,'ot')):'—'}</strong></article>`;
+  }).join('');
+  el('guestOvertime').innerHTML=cards||'<p>No operations for the selected filters.</p>';
+}
 function render(animate=true) {
   el('rangeText').textContent=from&&to?`${from} – ${to}`:'All dates';
   const direction=el('direction').value;
@@ -1290,6 +1318,18 @@ function render(animate=true) {
   el('vehicle').value=selected?selected.id:'';
   const rows=(selected?[selected]:context).sort((a,b)=>b.direction.localeCompare(a.direction)||b.start.localeCompare(a.start));
   el('container').textContent=selected?.container || '';
+  const guest=!payrollUser;
+  document.documentElement.classList.toggle('guest-dashboard',guest);
+  el('guestOvertime').hidden=!guest;
+  if(guest){
+    for(const id of ['monthlyCosts','combinedTimeline','cards','charts'])el(id).replaceChildren();
+    monthlyCostKey=undefined;
+    combinedTimelineKey=undefined;
+    previousCardsMarkup='';
+    renderedVisit=null;
+    renderGuestOvertime(rows);
+    return;
+  }
   const directions=(selected?[selected.direction]:direction?[direction]:['U','L']).filter(d=>rows.some(o=>o.direction===d)||displayedMonthlyArea(d,selected)!==null||operationCosts(selected,[],d).operatingCost>0);
   el('range').textContent=invalid?'From date must be on or before To date.':'';
   el('range').hidden=!invalid;
@@ -1984,6 +2024,7 @@ function setEditing(box,fields,editing,editButton,saveButton){
   if(editing)fields[0].focus();
 }
 el('openCosts').addEventListener('click',()=>{
+  if(!payrollUser)return;
   const job=el('job');
   if(!job.value){
     window.alert('Select a specific job from the Job list to open Job Costing.');
@@ -2111,8 +2152,32 @@ const payrollConnection=[
 ];
 const staffLinkCallback=new URLSearchParams(location.hash.slice(1));
 const isStaffLinkReturn=staffLinkCallback.has('access_token')&&['magiclink','signup','email'].includes(staffLinkCallback.get('type'));
+const staffRememberKey='gtl-staff-remember';
+function rememberSessionEnabled(){
+  try{return localStorage.getItem(staffRememberKey)!=='0';}catch{return false;}
+}
+const staffAuthStorage={
+  getItem(key){
+    try{return (rememberSessionEnabled()?localStorage:sessionStorage).getItem(key);}catch{return null;}
+  },
+  setItem(key,value){
+    try{(rememberSessionEnabled()?localStorage:sessionStorage).setItem(key,value);}catch{}
+  },
+  removeItem(key){
+    try{localStorage.removeItem(key);}catch{}
+    try{sessionStorage.removeItem(key);}catch{}
+  }
+};
+function setStaffRemember(enabled){
+  try{
+    const current=staffAuthStorage.getItem('gtl-payroll-auth');
+    localStorage.setItem(staffRememberKey,enabled?'1':'0');
+    staffAuthStorage.removeItem('gtl-payroll-auth');
+    if(current)staffAuthStorage.setItem('gtl-payroll-auth',current);
+  }catch{}
+}
 const payrollClient=window.supabase?.createClient(...payrollConnection,
-  {auth:{storageKey:'gtl-payroll-auth',persistSession:true,detectSessionInUrl:true}}
+  {auth:{storageKey:'gtl-payroll-auth',storage:staffAuthStorage,persistSession:true,detectSessionInUrl:true}}
 );
 const publishedCostsClient=window.supabase?.createClient(...payrollConnection,
   {auth:{storageKey:'gtl-published-costs',persistSession:false,autoRefreshToken:false,detectSessionInUrl:false}}
@@ -2928,6 +2993,8 @@ el('staffContinuePublic').addEventListener('click',async()=>{
     if(error){el('payrollLoginStatus').textContent=error.message;return;}
     verifiedStaffUid='';
   }
+  setPayrollSession(null);
+  render(false);
   revealDashboard();
   el('payrollLogin').close();
 });
@@ -2948,6 +3015,7 @@ el('staffPasswordForm').addEventListener('submit',event=>{
   event.preventDefault();
   void runStaffAction(async()=>{
     const email=el('payrollEmail').value.trim().toLowerCase();
+    setStaffRemember(el('staffRemember').checked);
     const {data,error}=await payrollClient.auth.signInWithPassword({email,password:el('staffPassword').value});
     if(error)throw error;
     rememberStaffEmail(email);
@@ -3005,7 +3073,7 @@ async function finishStaffLink(){
     if(!el('payrollLogin').open)el('payrollLogin').showModal();
     await requirePilotRole(data.user);
     setStaffStage('password');
-    status.textContent='Email verified. Set a password with at least 12 characters.';
+    status.textContent='';
     el('staffNewPassword').focus();
   }catch(error){
     if(!el('payrollLogin').open)el('payrollLogin').showModal();
@@ -3021,6 +3089,7 @@ el('staffSetupForm').addEventListener('submit',event=>{
     if(sessionError)throw sessionError;
     if(!verifiedStaffUid||sessionData.user?.id!==verifiedStaffUid)throw new Error('Verify your email again.');
     await requirePilotRole(sessionData.user);
+    setStaffRemember(true);
     const {error}=await payrollClient.auth.updateUser({password});
     if(error)throw error;
     verifiedStaffUid='';
