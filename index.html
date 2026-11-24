@@ -898,6 +898,12 @@ html.guest-dashboard :is(#openCosts,.costing-report-links,#monthlyCosts,#combine
 #guestOperations:not([hidden]){display:flex;flex-wrap:wrap;gap:6px;margin-bottom:8px}
 #guestOperations div{background:#fff;border:1px solid #dbe5ef;border-radius:7px;padding:5px 8px;font-size:.76rem}
 .guest-crew-hours td{font-variant-numeric:tabular-nums}
+#staffEmailCheck{color:#08764a;font-weight:700;font-size:12px;margin-inline-start:4px}
+#staffEmailCheck[hidden],.staff-field-error:empty{display:none}
+#payrollLogin .staff-field-error{display:block;margin:4px 0 6px;color:#a33d45;background:#fff2f3;padding:3px 6px;border-radius:4px;font-size:12px}
+#payrollLogin .staff-field-error:empty{display:none}
+#payrollLoginStatus[data-error]{color:#a33d45}
+#payrollLogin input[aria-invalid="true"]{border-color:#cd7980}
 </style>
 <header class="dashboard-header"><div class="job-header-actions"><div class="header-scope"><label><span>Customer</span><select id="customer"></select></label>
 <label><span>Job</span><select id="job"></select></label></div><div class="costing-report-links"><button id="openCosts" type="button" aria-haspopup="dialog"><svg class="ui-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" aria-hidden="true"><rect x="5" y="3" width="14" height="18" rx="2"/><path d="M8 8h8m-8 4h2m4 0h2m-8 4h2m4 0h2"/></svg>Job Costing</button><a href="./labour-report.html">Labour Report</a></div><p id="payrollSession" role="status"></p><button id="payrollSignIn" type="button">Staff Sign In</button><button id="payrollSignOut" type="button" hidden>Sign out</button></div><div class="dashboard-title"><img class="gtl-header-logo" src="./logo-header.png?v=golden-cost-logo" width="512" height="460" alt="GTL Job Costing"><div><p class="dashboard-brand">Global Transportation and PVT LTD</p><h1>Warehouse Operations &amp; Job Costing</h1><small>Vehicle turnaround, crew hours and job costs</small></div></div>
@@ -936,10 +942,10 @@ html.guest-dashboard :is(#openCosts,.costing-report-links,#monthlyCosts,#combine
 <form method="dialog"><button class="close" aria-label="Close sign-in">Close</button></form>
 <h2 id="staffLoginHeading">Staff Sign In</h2>
 <p id="staffLoginDescription">Enter your email and password.</p>
-<p id="staffEmailField"><label for="payrollEmail">Email address</label><input id="payrollEmail" type="email" required autocomplete="username" list="staffEmailSuggestions" form="staffPasswordForm"></p>
+<p id="staffEmailField"><label for="payrollEmail">Email address <span id="staffEmailCheck" aria-label="Valid email format" hidden>✓</span></label><input id="payrollEmail" aria-describedby="staffEmailError" type="email" required autocomplete="username" list="staffEmailSuggestions" form="staffPasswordForm"><span id="staffEmailError" class="staff-field-error" role="status"></span></p>
 <datalist id="staffEmailSuggestions"></datalist>
 <form id="staffPasswordForm">
-<label>Password<input id="staffPassword" type="password" required autocomplete="current-password"></label>
+<label>Password<input id="staffPassword" aria-describedby="staffPasswordError" type="password" required autocomplete="current-password"></label><p id="staffPasswordError" class="staff-field-error" role="status"></p>
 <label class="staff-remember"><input id="staffRemember" type="checkbox" checked> Remember me</label>
 <button type="submit">Sign in</button>
 </form>
@@ -2979,13 +2985,41 @@ async function requireStaffRole(user){
   if(error)throw error;
   if(!['management','payroll_admin'].includes(data))throw new Error('Staff access has not been assigned to this email.');
 }
+function staffFieldError(field,error,message){
+  el(error).textContent=message;
+  if(message)el(field).setAttribute('aria-invalid','true');
+  else el(field).removeAttribute('aria-invalid');
+}
+function refreshStaffEmailCheck(){
+  const email=el('payrollEmail');
+  el('staffEmailCheck').hidden=!email.value||!email.validity.valid||email.hasAttribute('aria-invalid');
+}
+function resetStaffFieldErrors(){
+  staffFieldError('payrollEmail','staffEmailError','');
+  staffFieldError('staffPassword','staffPasswordError','');
+  refreshStaffEmailCheck();
+  delete el('payrollLoginStatus').dataset.error;
+}
+el('payrollEmail').addEventListener('invalid',event=>{
+  event.preventDefault();
+  staffFieldError('payrollEmail','staffEmailError','Invalid email ID.');
+  refreshStaffEmailCheck();
+  el('payrollEmail').focus();
+});
+el('staffPassword').addEventListener('invalid',event=>{
+  event.preventDefault();
+  staffFieldError('staffPassword','staffPasswordError','Enter your password.');
+  el('staffPassword').focus();
+});
+el('staffPassword').addEventListener('input',()=>staffFieldError('staffPassword','staffPasswordError',''));
 async function runStaffAction(action){
   if(staffBusy)return;
   const status=el('payrollLoginStatus');
   if(!payrollClient){status.textContent='Staff sign-in could not load.';return;}
   staffBusy=true;
   status.textContent='';
-  try{await action(status);}catch(error){status.textContent=error.message;}
+  delete status.dataset.error;
+  try{await action(status);}catch(error){status.dataset.error='';status.textContent=error.message;}
   finally{staffBusy=false;}
 }
 function showStaffEntry(){
@@ -2995,6 +3029,7 @@ function showStaffEntry(){
   const suggestions=[...new Set([saved,pilotStaffEmail].filter(Boolean))];
   el('staffEmailSuggestions').replaceChildren(...suggestions.map(value=>new Option(value)));
   el('payrollEmail').value=saved;
+  resetStaffFieldErrors();
   el('payrollLoginStatus').textContent='';
   setStaffStage('sign-in');
   if(!el('payrollLogin').open)el('payrollLogin').showModal();
@@ -3004,6 +3039,7 @@ el('staffNewUser').addEventListener('click',()=>{
   resetVerifySlider();
   el('payrollEmail').value='';
   el('staffPassword').value='';
+  resetStaffFieldErrors();
   el('payrollLoginStatus').textContent='';
   setStaffStage('email');
   el('payrollEmail').focus();
@@ -3053,7 +3089,13 @@ el('staffPasswordForm').addEventListener('submit',event=>{
     const email=el('payrollEmail').value.trim().toLowerCase();
     setStaffRemember(el('staffRemember').checked);
     const {data,error}=await payrollClient.auth.signInWithPassword({email,password:el('staffPassword').value});
-    if(error)throw error;
+    if(error){
+      if(error.code==='invalid_credentials'||error.message==='Invalid login credentials'){
+        staffFieldError('staffPassword','staffPasswordError','Email or password is incorrect.');
+        return;
+      }
+      throw error;
+    }
     try{await requireStaffRole(data.user);}
     catch(error){await payrollClient.auth.signOut({scope:'local'});throw error;}
     rememberStaffEmail(email);
@@ -3072,6 +3114,7 @@ function resetVerifySlider(){
 }
 el('payrollEmail').addEventListener('input',()=>{
   if(staffBusy)return;
+  resetStaffFieldErrors();
   resetVerifySlider();
   el('payrollLoginStatus').textContent='';
 });
