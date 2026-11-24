@@ -942,6 +942,11 @@ html.guest-dashboard :is(#openCosts,.costing-report-links,#monthlyCosts,#combine
   #staffWelcome{padding:16px}
   #staffWelcomeName{overflow-wrap:anywhere}
 }
+#costSettings .cost-job-filter{display:flex;align-items:center;gap:6px;width:fit-content;max-width:100%;margin:6px 0;color:#fff;font-size:.75rem}
+#costSettings .cost-job-filter select{width:clamp(128px,22vw,225px);max-width:75vw;min-height:30px;padding:4px 6px}
+#costSettings #jobCharges label{width:min(100%,320px)}
+#costSettings #jobCharges input[list]{width:100%}
+#costSettings .charge-fields select{width:min(100%,225px)}
 </style>
 <header class="dashboard-header"><div class="job-header-actions"><div class="header-scope"><label><span>Customer</span><select id="customer"></select></label>
 <label><span>Job</span><select id="job"></select></label></div><div class="costing-report-links"><button id="openCosts" type="button" aria-haspopup="dialog"><svg class="ui-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" aria-hidden="true"><rect x="5" y="3" width="14" height="18" rx="2"/><path d="M8 8h8m-8 4h2m4 0h2m-8 4h2m4 0h2"/></svg>Job Costing</button><a href="./labour-report.html">Labour Report</a></div><p id="payrollSession" role="status"></p><button id="payrollSignIn" type="button">Management Login</button><button id="payrollSignOut" type="button" hidden>Sign out</button></div><div class="dashboard-title"><img class="gtl-header-logo" src="./logo-header.png?v=golden-cost-logo" width="512" height="460" alt="GTL Job Costing"><div><p class="dashboard-brand">Global Transportation and PVT LTD</p><h1>Warehouse Operations &amp; Job Costing</h1><small>Vehicle turnaround, crew hours and job costs</small></div></div>
@@ -1010,15 +1015,11 @@ html.guest-dashboard :is(#openCosts,.costing-report-links,#monthlyCosts,#combine
 <p id="staffWelcomeName">Sandun Prasanna</p>
 <form method="dialog"><button type="submit">Continue to Dashboard</button></form>
 </dialog>
-<dialog id="jobCostPicker" aria-labelledby="jobCostPickerTitle">
-<form id="jobCostPickerForm"><h2 id="jobCostPickerTitle">Choose a Job</h2>
-<label>Job<select id="jobCostPickerSelect" required></select></label>
-<button type="submit">Open Job Costing</button>
-<button type="button" id="cancelJobCostPicker">Cancel</button></form></dialog>
+
 <dialog id="costSettings" aria-labelledby="costTitle">
 <form id="costForm">
 <div class="cost-page-header"><div class="cost-header-top"><div><h2 id="costTitle">Job Costing</h2><p id="jobCostContext" class="job-context"></p></div><button id="cancelCosts" type="button"><span aria-hidden="true">←</span> Back to Dashboard</button></div>
-<nav id="costSections" aria-label="Cost categories"></nav></div>
+<label class="cost-job-filter">Job <select id="costJobScope"></select></label><nav id="costSections" aria-label="Cost categories"></nav></div>
 <div class="cost-page-body">
 <section id="areaCostSection"><h3>Storage / Area Rates</h3>
 <div class="cost-inputs">
@@ -1542,7 +1543,12 @@ el('clearDates').addEventListener('click',()=>commitDates('',''));
 el('cancelDates').addEventListener('click',()=>el('rangeDialog').close());
 el('applyDates').addEventListener('click',()=>commitDates(draftFrom,draftTo));
 const legacyCostStorageKey='dsv-decathlon-cost-settings-v1';
-const costStorageKey=()=>`dsv-job-costing-v2:${JSON.stringify([el('customer').value,el('job').value])}`;
+const allJobsCostKey='__gtl_all_jobs__';
+let costEditorJob=null;
+const costingJob=()=>costEditorJob??el('job').value;
+const costStorageKey=()=>`dsv-job-costing-v2:${JSON.stringify([el('customer').value,costingJob()||allJobsCostKey])}`;
+const scopedCostJobs=()=>el('job').value?scopedJobs():[...scopedJobs(),allJobsCostKey];
+const jobCostScopeLabel=job=>job===allJobsCostKey||!job?'All Jobs':jobLabel(job);
 const chargeCategories=[['equipment','Equipment'],['consumables','Consumables'],['storage','Additional Storage & Space'],['vas','VAS / Rework'],['thirdParty','Third-party Charges']];
 const money=value=>new Intl.NumberFormat('en-LK',{style:'currency',currency:'LKR',minimumFractionDigits:2,maximumFractionDigits:2}).format(value);
 const knownAmount=value=>Number.isFinite(value)&&value>=0;
@@ -1606,7 +1612,7 @@ function readCosts(){
   const defaultPayroll=defaultPayrollForJob();
   try {
     const scoped=localStorage.getItem(costStorageKey());
-    const legacy=el('customer').value==='DSV'&&el('job').value==='4974'&&scoped===null?localStorage.getItem(legacyCostStorageKey):null;
+    const legacy=el('customer').value==='DSV'&&costingJob()==='4974'&&scoped===null?localStorage.getItem(legacyCostStorageKey):null;
     const saved=JSON.parse(scoped??legacy);
     if(saved&&Array.isArray(saved.payroll)){
       const existing=new Set(saved.payroll.map(person=>person.epf));
@@ -1618,7 +1624,7 @@ function readCosts(){
   return {hours:null,unload:null,load:null,payroll:defaultPayroll};
 }
 let costSettings=readCosts();
-const refreshCostWeeks=keepSelection=>updateWeeks(scopedJobs().flatMap(job=>chargeCategories.flatMap(([key])=>categoryEntries(key,dashboardJobCosts(job)).map(entry=>entry.date).filter(Boolean))),keepSelection);
+const refreshCostWeeks=keepSelection=>updateWeeks(scopedCostJobs().flatMap(job=>chargeCategories.flatMap(([key])=>categoryEntries(key,dashboardJobCosts(job)).map(entry=>entry.date).filter(Boolean))),keepSelection);
 
 function changeJob(){
   updateJobCostingAccess();
@@ -1641,6 +1647,16 @@ function showsMonthlyCharges(visit){
 function operationCosts(visit,rows,direction,vehicleOnly=false,allVehicleTypes=false){
   const jobs=visit?[visit.job]:scopedJobs();
   const parts=jobs.map(job=>jobOperationCosts(job,visit,rows.filter(row=>row.job===job),direction,vehicleOnly,allVehicleTypes));
+  if(!visit&&!vehicleOnly&&!el('job').value){
+    const shared=jobOperationCosts(allJobsCostKey,null,rows,direction,false,allVehicleTypes);
+    if(knownAmount(shared.rate)&&shared.sqft!==null)for(const part of parts)part.areaCost=0;
+    shared.matched=[];
+    shared.shared=false;
+    shared.labour=0;
+    shared.hasRows=false;
+    if(parts.some(part=>part.sqft!==null))shared.sqft=null;
+    parts.push(shared);
+  }
   const sqft=parts.filter(part=>part.sqft!==null);
   return {
     matched:parts.flatMap(part=>part.matched),shared:parts.some(part=>part.shared),
@@ -1657,7 +1673,7 @@ function jobOperationCosts(job,visit,rows,direction,vehicleOnly,allVehicleTypes)
   const labour=matched.reduce((n,entry)=>n+entry.amount,0);
   const jobCosts=dashboardJobCosts(job);
   const rate=direction==='L'?jobCosts.load:jobCosts.unload;
-  const sqft=!showAreaForJobScope()||vehicleOnly||(!allVehicleTypes&&el('kind').value)?null:monthlyAreaSqft(direction,visit,[job]);
+  const sqft=!showAreaForJobScope()||vehicleOnly||(!allVehicleTypes&&el('kind').value)?null:monthlyAreaSqft(direction,visit,job===allJobsCostKey?scopedJobs():[job]);
   const areaCost=sqft!==null&&knownAmount(rate)?sqft*rate:0;
   const dated=datedCharges(rows,direction,visit,jobCosts,allVehicleTypes).filter(entry=>!vehicleOnly||rows.some(row=>row.id===entry.entry.vehicle));
   const categoryCosts=chargeCategories.map(([key,label])=>{
@@ -1675,7 +1691,7 @@ function monthlyCostReport(){
   const [loading,unloading]=['L','U'].map(direction=>
     operationCosts(null,rows.filter(row=>row.direction===direction),direction,false,true));
   const total=cost=>cost.labour+cost.areaCost+cost.operatingCost;
-  const charges=scopedJobs().flatMap(job=>chargeCategories.flatMap(([category,label])=>categoryEntries(category,dashboardJobCosts(job))
+  const charges=scopedCostJobs().flatMap(job=>chargeCategories.flatMap(([category,label])=>categoryEntries(category,dashboardJobCosts(job))
     .filter(entry=>!entry.date||(entry.date>=from&&entry.date<=to))
     .flatMap(entry=>['L','U','UL'].flatMap(direction=>{
       const amount=chargeTotal(entry,direction);
@@ -1755,7 +1771,7 @@ function monthlyExcelSheets(report,customer,job,crews,publications){
     }
   }
   for(const {job,label,entry,direction,amount} of report.charges){
-    charges.push([label,entry.item??'',direction==='UL'?'Both (U/L)':operationName(direction),entry.date??'',entry.periodEnd??'',entry.quantity??1,entry.vehicle??'',amount,jobLabel(job)]);
+    charges.push([label,entry.item??'',direction==='UL'?'Both (U/L)':operationName(direction),entry.date??'',entry.periodEnd??'',entry.quantity??1,entry.vehicle??'',amount,jobCostScopeLabel(job)]);
   }
   const monthlyArea=[['Operation','Uploaded Area (sq ft)','Rate (LKR / sq ft)','Area Cost (LKR)'],
     ...[['Loading',report.loading],['Unloading',report.unloading]].map(([label,cost])=>[label,cost.sqft,cost.rate??null,cost.areaCost])];
@@ -2103,25 +2119,31 @@ el('openCosts').addEventListener('click',async()=>{
     el('downloadMonthlyExcel').hidden=false;
     await refreshPublishedJobCosts(false);
     if(payrollUser?.id!==user.id)return;
-    if(el('job').value){openJobCosting();return;}
-    const jobs=customerJobs();
-    if(!jobs.length){el('payrollSession').textContent='No jobs available for this customer.';return;}
-    el('jobCostPickerSelect').replaceChildren(...jobs.map(job=>new Option(jobLabel(job),job)));
-    if(!el('jobCostPicker').open)el('jobCostPicker').showModal();
+    const picker=el('costJobScope');
+    picker.replaceChildren(new Option('All Jobs',''),...customerJobs().map(job=>new Option(jobLabel(job),job)));
+    picker.value=el('job').value;
+    costEditorJob=picker.value;
+    selectCostTab('payroll');
+    el('payrollMonth').value=el('monthFilter').value||el('payrollMonth').value;
+    el('costSettings').scrollTop=0;
+    el('costSettings').showModal();
+    loadJobCostScope();
   }catch(error){el('payrollSession').textContent=error.message;}
 });
-el('cancelJobCostPicker').addEventListener('click',()=>el('jobCostPicker').close());
-el('jobCostPickerForm').addEventListener('submit',event=>{
-  event.preventDefault();
-  const job=el('jobCostPickerSelect').value;
-  if(!canEditCosting()||!customerJobs().includes(job))return;
-  el('job').value=job;
-  changeJob();
-  el('jobCostPicker').close();
-  openJobCosting();
+el('costJobScope').addEventListener('change',()=>{
+  if(!canEditCosting())return;
+  costEditorJob=el('costJobScope').value;
+  loadJobCostScope();
 });
-function openJobCosting(){
-  const shared=publishedJobCosts.get(jobCostKey(el('customer').value,el('job').value));
+el('costSettings').addEventListener('close',()=>{
+  costEditorJob=null;
+  costingPayrollEpfs=null;
+  payrollReadVersion++;
+  costSettings=readCosts();
+});
+function loadJobCostScope(){
+  costSettings=readCosts();
+  const shared=publishedJobCosts.get(jobCostKey(el('customer').value,costingJob()||allJobsCostKey));
   if(shared){
     const local=costSettings;
     const matchingCharge=(entry,candidate)=>['U','L','UL','date','periodEnd','vehicle','quantity']
@@ -2138,23 +2160,22 @@ function openJobCosting(){
     input.value=costSettings[box.dataset.rate]??'';
     setEditing(box,[input],false,'[data-edit-rate]','[data-save-rate]');
   }
-  el('payrollMonth').value=el('monthFilter').value||el('payrollMonth').value;
   payrollMaster.clear();
+  costingPayrollEpfs=null;
   renderPayrollRows();
   el('costMessage').textContent='';
-  el('jobCostContext').textContent=`${el('customer').value} · Job ${el('job').value}`;
+  el('jobCostContext').textContent=`${el('customer').value} · ${jobCostScopeLabel(costingJob())}`;
   el('jobCharges').innerHTML=chargeCategories.map(([key,label])=>
-    `<label data-category="${key}">Item / Service<input list="charge-items-${key}" aria-label="${esc(label)} item" placeholder="Choose or type an item"><datalist id="charge-items-${key}">${optionList(categoryOptions[key])}</datalist></label>`).join('');
+    `<label data-category="${key}">Item / Service<input list="charge-items-${key}" aria-label="${esc(label)} item" autocomplete="off" placeholder="Choose or type an item"><datalist id="charge-items-${key}">${optionList(categoryOptions[key])}</datalist></label>`).join('');
   el('vasDetails').value=costSettings.vasDetails??'';
-  selectCostTab('payroll');
-  el('costSettings').scrollTop=0;
-  el('costSettings').showModal();
+  selectCostTab(selectedCostTab);
   void refreshSharedPayroll();
 }
+let costingPayrollEpfs=null;
 function renderPayrollRows(){
   el('payrollRows').innerHTML='';
   for(const [epf,person] of [...payrollMaster].sort((a,b)=>roleOrder(a[1])-roleOrder(b[1])||a[0].localeCompare(b[0],undefined,{numeric:true}))){
-    addPayrollRow({epf,...person});
+    if(!costingPayrollEpfs||costingPayrollEpfs.has(epf))addPayrollRow({epf,...person});
   }
   for(const row of el('payrollRows').rows)paintBasicHourly(row);
   el('addPay').hidden=!canEditCosting();
@@ -2354,7 +2375,6 @@ function setPayrollSession(user){
     const publicCosts=readPublicDashboardData('job-costs');
     if(publicCosts)applyPublishedJobCosts(publicCosts);
     if(el('costSettings').open)el('costSettings').close();
-    if(el('jobCostPicker').open)el('jobCostPicker').close();
     movementCrewByMonth.clear();
     diagnosticPayrollByMonth.clear();
     payrollMaster.clear();loadedPayrollMonth='';payrollReadVersion++;
@@ -2412,7 +2432,7 @@ function dashboardJobCosts(job=el('job').value){
   const key=jobCostKey(el('customer').value,job);
   const published=publishedJobCosts.get(key);
   if(published)return published;
-  if(job===el('job').value)return costSettings;
+  if(job===(costingJob()||allJobsCostKey))return costSettings;
   try{return JSON.parse(localStorage.getItem('dsv-job-costing-v2:'+key))??{};}catch{return {};}
 }
 let jobCostPublishQueue=Promise.resolve();
@@ -2437,7 +2457,7 @@ function applyPublishedJobCosts(data){
 function publishJobCosts(){
   if(!canEditCosting())return;
   const status=el('publishJobCostsStatus');
-  const customer=el('customer').value,job=el('job').value;
+  const customer=el('customer').value,job=costingJob()||allJobsCostKey;
   const costs={
     load:costSettings.load??null,unload:costSettings.unload??null,
     chargeEntries:Object.fromEntries(chargeCategories.map(([key])=>[key,categoryEntries(key).map(entry=>({
@@ -2446,12 +2466,12 @@ function publishJobCosts(){
       quantity:entry.quantity??1,vehicle:entry.vehicle??null
     }))]))
   };
-  status.textContent='Publishing costs for '+customer+' · '+job+'…';
+  status.textContent='Publishing costs for '+customer+' · '+jobCostScopeLabel(job)+'…';
   jobCostPublishQueue=jobCostPublishQueue.then(async()=>{
     const {error}=await payrollClient.rpc('gtl_publish_job_costs',{p_customer:customer,p_job:job,p_costs:costs});
     if(error)throw error;
     await refreshPublishedJobCosts();
-    status.textContent='Job costs published for '+customer+' · '+job+'.';
+    status.textContent='Job costs published for '+customer+' · '+jobCostScopeLabel(job)+'.';
   }).catch(error=>{status.textContent='Job costs could not be published: '+error.message;});
 }
 el('publishJobCosts').addEventListener('click',()=>{
@@ -3303,6 +3323,16 @@ async function refreshSharedPayroll(){
   try{
     const result=await monthlyPayrollRpc('gtl_monthly_payroll',{payroll_month:month,epfs});
     if(version!==payrollReadVersion||month!==el('payrollMonth').value)return;
+    const job=costEditorJob;
+    let visibleEpfs=null;
+    if(job){
+      const customer=el('customer').value;
+      const rows=await movementCostingOperations(month);
+      visibleEpfs=new Set(rows.filter(row=>row.customer===customer&&row.job===job&&row.start.slice(0,7)===month)
+        .flatMap(row=>crewRoles.flatMap(([,field])=>(row[field]??[]).map(payrollEpf))));
+    }
+    if(version!==payrollReadVersion||job!==costEditorJob)return;
+    costingPayrollEpfs=visibleEpfs;
     payrollMaster=new Map(result.records);
     loadedRevision=result.revision;
     loadedPayrollMonth=month;
@@ -3441,7 +3471,7 @@ function selectedChargePeriod(){
 }
 function updateChargeVehicles(preferred=''){
   const direction=el('chargeDirection').value;
-  const available=activeOperations().filter(o=>o.direction===direction);
+  const available=operations.filter(o=>o.customer===el('customer').value&&o.job===costingJob()&&o.direction===direction);
   el('chargeVehicle').innerHTML='<option value="">Job-wide charge</option>'+available.map(o=>`<option value="${esc(o.id)}">${esc(visitLabel(o))}</option>`).join('');
   el('chargeVehicle').value=available.some(o=>o.id===preferred)?preferred:'';
   el('chargeVehicle').disabled=direction==='UL';
@@ -3558,7 +3588,7 @@ el('saveJobCharges').addEventListener('click',async()=>{
   let lkrRate=rate;
   if(currency==='USD'){
     const button=el('saveJobCharges');
-    const tab=selectedCostTab, job=el('job').value, customer=el('customer').value;
+    const tab=selectedCostTab, job=costingJob(), customer=el('customer').value;
     const editorIndex=editChargeIndex;
     const settings=costSettings;
     button.disabled=true;
@@ -3566,7 +3596,7 @@ el('saveJobCharges').addEventListener('click',async()=>{
     try{
       const previous=editorIndex===null?null:categoryEntries(tab)[editorIndex];
       const fx=previous?.fx&&previous.date===period.date?previous.fx:await usdReferenceRate(period.date);
-      if(tab!==selectedCostTab||job!==el('job').value||customer!==el('customer').value||editorIndex!==editChargeIndex||settings!==costSettings)return;
+      if(tab!==selectedCostTab||job!==costingJob()||customer!==el('customer').value||editorIndex!==editChargeIndex||settings!==costSettings)return;
       Object.assign(entry,{currency,originalRate:rate,fx});
       lkrRate=rate*fx.rate;
     }catch{
