@@ -1010,14 +1010,11 @@ html.guest-dashboard :is(#openCosts,.costing-report-links,#monthlyCosts,#combine
 <p id="staffWelcomeName">Sandun Prasanna</p>
 <form method="dialog"><button type="submit">Continue to Dashboard</button></form>
 </dialog>
-<dialog id="payrollLock" aria-labelledby="payrollLockTitle">
-<form id="payrollPinForm">
-<h2 id="payrollLockTitle">Unlock Job Costing</h2>
-<label>PIN<input id="payrollPin" type="password" inputmode="numeric" autocomplete="off" required></label>
-<p id="pinMessage" role="alert"></p>
-<div class="cost-actions"><button id="cancelPin" type="button">Cancel</button><button type="submit">Unlock</button></div>
-</form>
-</dialog>
+<dialog id="jobCostPicker" aria-labelledby="jobCostPickerTitle">
+<form id="jobCostPickerForm"><h2 id="jobCostPickerTitle">Choose a Job</h2>
+<label>Job<select id="jobCostPickerSelect" required></select></label>
+<button type="submit">Open Job Costing</button>
+<button type="button" id="cancelJobCostPicker">Cancel</button></form></dialog>
 <dialog id="costSettings" aria-labelledby="costTitle">
 <form id="costForm">
 <div class="cost-page-header"><div class="cost-header-top"><div><h2 id="costTitle">Job Costing</h2><p id="jobCostContext" class="job-context"></p></div><button id="cancelCosts" type="button"><span aria-hidden="true">←</span> Back to Dashboard</button></div>
@@ -1160,7 +1157,7 @@ function updateJobs(){
 }
 function updateJobCostingAccess(){
   const button=el('openCosts');
-  button.title=!el('job').value?'Select a specific job to open Job Costing':'';
+  button.title=!el('job').value?'Choose a job inside Job Costing':'';
 }
 el('customer').innerHTML=optionList(customers);
 el('customer').value=customers[0]??'';
@@ -1792,7 +1789,7 @@ async function buildMonthlyExcel(sheets,{blueHeader=false}={}){
   return zip.generateAsync({type:'blob',compression:'DEFLATE',mimeType:content+'.sheet'});
 }
 el('downloadMonthlyExcel').addEventListener('click',async()=>{
-  if(!canManagePayroll())return;
+  if(!canEditCosting())return;
   const status=el('monthlyExportStatus');
   const button=el('downloadMonthlyExcel');
   if(!showsMonthlyCharges(null)){
@@ -1809,10 +1806,10 @@ el('downloadMonthlyExcel').addEventListener('click',async()=>{
     if(!window.JSZip)throw new Error('Excel support is unavailable.');
     const crewRows=report.rows.some(row=>row.crewPrivate)
       ?await monthlyPayrollRpc('gtl_private_movement_crews',{period:report.month}):[];
-    if(payrollUser?.id!==account||!canManagePayroll()){status.textContent='';return;}
+    if(payrollUser?.id!==account||!canEditCosting()){status.textContent='';return;}
     const crews=new Map(crewRows.map(row=>[String(row.id),row]));
     const blob=await buildMonthlyExcel(monthlyExcelSheets(report,customer,job,crews,publications));
-    if(payrollUser?.id!==account||!canManagePayroll()){status.textContent='';return;}
+    if(payrollUser?.id!==account||!canEditCosting()){status.textContent='';return;}
     const url=URL.createObjectURL(blob);
     const link=document.createElement('a');
     link.href=url;
@@ -2037,7 +2034,7 @@ function addPayrollRow(person={},editing=false){
     const value=esc(person[field]??'');
     return `<td><input aria-label="${label}" data-field="${field}" value="${value}" ${attributes}${readonly}><span class="payroll-value" title="${value}">${value||'—'}</span></td>`;
   };
-  const actions=canManagePayroll()?`<div class="pay-actions-line">
+  const actions=canEditCosting()?`<div class="pay-actions-line">
     <button type="button" data-edit-pay ${editing?'disabled':''}>Edit</button>
     <button type="button" data-save-pay ${editing?'':'disabled'}>Save</button>
     <button type="button" data-remove-pay>Remove</button>
@@ -2075,6 +2072,7 @@ function showChargeSaved(){
   chargeSavedTimer=setTimeout(()=>{toast.hidden=true;toast.textContent='';},2800);
 }
 function saveCosts(updated){
+  if(!canEditCosting())return false;
   try{
     localStorage.setItem(costStorageKey(),JSON.stringify(updated));
   }catch{
@@ -2095,29 +2093,46 @@ function setEditing(box,fields,editing,editButton,saveButton){
   box.querySelector(saveButton).disabled=!editing;
   if(editing)fields[0].focus();
 }
-el('openCosts').addEventListener('click',()=>{
-  if(!payrollUser)return;
-  const job=el('job');
-  if(!job.value){
-    window.alert('Select a specific job from the Job list to open Job Costing.');
-    job.focus();
-    return;
-  }
-  el('payrollPin').value='';
-  el('pinMessage').textContent='';
-  el('payrollLock').showModal();
-  el('payrollPin').focus();
+el('openCosts').addEventListener('click',async()=>{
+  const user=payrollUser;
+  if(!user)return;
+  try{
+    await requireStaffRole(user);
+    if(payrollUser?.id!==user.id)return;
+    costingStaffUid=user.id;
+    el('downloadMonthlyExcel').hidden=false;
+    await refreshPublishedJobCosts(false);
+    if(payrollUser?.id!==user.id)return;
+    if(el('job').value){openJobCosting();return;}
+    const jobs=customerJobs();
+    if(!jobs.length){el('payrollSession').textContent='No jobs available for this customer.';return;}
+    el('jobCostPickerSelect').replaceChildren(...jobs.map(job=>new Option(jobLabel(job),job)));
+    if(!el('jobCostPicker').open)el('jobCostPicker').showModal();
+  }catch(error){el('payrollSession').textContent=error.message;}
 });
-el('cancelPin').addEventListener('click',()=>el('payrollLock').close());
-el('payrollPinForm').addEventListener('submit',event=>{
+el('cancelJobCostPicker').addEventListener('click',()=>el('jobCostPicker').close());
+el('jobCostPickerForm').addEventListener('submit',event=>{
   event.preventDefault();
-  if(el('payrollPin').value!=='445566'){
-    el('pinMessage').textContent='Incorrect PIN.';
-    el('payrollPin').select();
-    return;
+  const job=el('jobCostPickerSelect').value;
+  if(!canEditCosting()||!customerJobs().includes(job))return;
+  el('job').value=job;
+  changeJob();
+  el('jobCostPicker').close();
+  openJobCosting();
+});
+function openJobCosting(){
+  const shared=publishedJobCosts.get(jobCostKey(el('customer').value,el('job').value));
+  if(shared){
+    const local=costSettings;
+    const matchingCharge=(entry,candidate)=>['U','L','UL','date','periodEnd','vehicle','quantity']
+      .every(key=>(entry[key]??null)===(candidate[key]??null));
+    costSettings={...local,...shared,chargeEntries:Object.fromEntries(chargeCategories.map(([key])=>[key,
+      (shared.chargeEntries?.[key]??[]).map(entry=>{
+        const draft=canManagePayroll()&&!entry.item?categoryEntries(key,local).find(item=>matchingCharge(entry,item)):null;
+        return draft?{...entry,item:draft.item,unit:draft.unit,notes:draft.notes,month:draft.month,currency:draft.currency,originalRate:draft.originalRate,fx:draft.fx}:entry;
+      })]))};
   }
-  el('payrollPin').value='';
-  el('payrollLock').close();
+  el('publishJobCostControls').hidden=!canEditCosting();
   for(const box of el('costForm').querySelectorAll('[data-rate]')){
     const input=box.querySelector('input');
     input.value=costSettings[box.dataset.rate]??'';
@@ -2135,14 +2150,14 @@ el('payrollPinForm').addEventListener('submit',event=>{
   el('costSettings').scrollTop=0;
   el('costSettings').showModal();
   void refreshSharedPayroll();
-});
+}
 function renderPayrollRows(){
   el('payrollRows').innerHTML='';
   for(const [epf,person] of [...payrollMaster].sort((a,b)=>roleOrder(a[1])-roleOrder(b[1])||a[0].localeCompare(b[0],undefined,{numeric:true}))){
     addPayrollRow({epf,...person});
   }
   for(const row of el('payrollRows').rows)paintBasicHourly(row);
-  el('addPay').hidden=!canManagePayroll();
+  el('addPay').hidden=!canEditCosting();
 }
 let payrollReadVersion=0;
 function parsePayrollCsv(csv){
@@ -2256,6 +2271,7 @@ const publishedCostsClient=window.supabase?.createClient(...payrollConnection,
   {auth:{storageKey:'gtl-published-costs',persistSession:false,autoRefreshToken:false,detectSessionInUrl:false}}
 );
 let payrollUser=null;
+let costingStaffUid=null;
 const movementCrewByMonth=new Map();
 const diagnosticPayrollByMonth=new Map();
 function requestMovementCrew(month){
@@ -2333,6 +2349,12 @@ function visibleVehicleCrew(visit){
 function setPayrollSession(user){
   const sessionChanged=payrollUser?.id!==user?.id;
   if(sessionChanged){
+    costingStaffUid=null;
+    publishedJobCosts.clear();
+    const publicCosts=readPublicDashboardData('job-costs');
+    if(publicCosts)applyPublishedJobCosts(publicCosts);
+    if(el('costSettings').open)el('costSettings').close();
+    if(el('jobCostPicker').open)el('jobCostPicker').close();
     movementCrewByMonth.clear();
     diagnosticPayrollByMonth.clear();
     payrollMaster.clear();loadedPayrollMonth='';payrollReadVersion++;
@@ -2343,11 +2365,15 @@ function setPayrollSession(user){
     el('submitPayrollFile').disabled=true;
   }
   payrollUser=user;
+  if(sessionChanged&&!user)void refreshPublishedJobCosts();
   el('payrollSignIn').hidden=Boolean(user);
   el('payrollSignOut').hidden=!user;
   const email=user?.email?.trim().toLowerCase();
   const canUpload=email===payrollAdminEmail;
   el('areaMasterFile').disabled=!canUpload;
+  el('areaMasterFile').closest('label').hidden=!canUpload;
+  el('payrollMasterFile').disabled=!canUpload;
+  el('movementUpload').disabled=!canUpload;
   el('areaMasterStatus').textContent=canUpload?'Choose the monthly Area Report workbook.':'Sign in as payroll admin to upload.';
   el('downloadMonthlyExcel').hidden=!canUpload;
   el('payrollUploadLabel').hidden=!canUpload;
@@ -2355,7 +2381,7 @@ function setPayrollSession(user){
   el('publishJobCostControls').hidden=!canUpload;
   el('movementUploadLabel').hidden=!canUpload;
   el('payrollUploadAccess').textContent=canUpload?'':
-    email?'Signed in as '+email+' · View only. Sign in as the payroll administrator to upload.':
+    email?'File uploads are available to the payroll administrator.':
     'Sign in from the dashboard to upload or view shared payroll.';
   el('payrollSession').textContent='';
   if(sessionChanged)render(false);
@@ -2364,6 +2390,7 @@ function setPayrollSession(user){
 }
 const publishedLabour=new Map();
 const canManagePayroll=()=>payrollUser?.email?.trim().toLowerCase()===payrollAdminEmail;
+const canEditCosting=()=>canManagePayroll()||Boolean(payrollUser&&payrollUser.id===costingStaffUid);
 const payrollToday=new Intl.DateTimeFormat('en',{timeZone:'Asia/Colombo',year:'numeric',month:'2-digit'}).formatToParts(new Date());
 el('payrollMonth').value=['year','month'].map(type=>payrollToday.find(part=>part.type===type).value).join('-');
 let loadedPayrollMonth='';
@@ -2391,9 +2418,14 @@ function dashboardJobCosts(job=el('job').value){
 let jobCostPublishQueue=Promise.resolve();
 async function refreshPublishedJobCosts(renderAfter=true){
   if(!publishedCostsClient)return;
-  const {data,error}=await publishedCostsClient.rpc('gtl_public_job_costs');
-  if(error)return;
-  if(!cachePublicDashboardData('job-costs',data??[]))return;
+  const staff=canEditCosting(), userId=payrollUser?.id;
+  const {data,error}=staff?await payrollClient.rpc('gtl_staff_job_costs'):await publishedCostsClient.rpc('gtl_public_job_costs');
+  if(userId!==payrollUser?.id||staff!==canEditCosting())return;
+  if(error){
+    if(staff)throw new Error(error.message);
+    return;
+  }
+  if(!staff&&!cachePublicDashboardData('job-costs',data??[]))return;
   applyPublishedJobCosts(data??[]);
   if(renderAfter)render();
 }
@@ -2403,12 +2435,13 @@ function applyPublishedJobCosts(data){
   refreshCostWeeks(true);
 }
 function publishJobCosts(){
-  if(payrollUser?.email?.trim().toLowerCase()!==payrollAdminEmail)return;
+  if(!canEditCosting())return;
   const status=el('publishJobCostsStatus');
   const customer=el('customer').value,job=el('job').value;
   const costs={
     load:costSettings.load??null,unload:costSettings.unload??null,
     chargeEntries:Object.fromEntries(chargeCategories.map(([key])=>[key,categoryEntries(key).map(entry=>({
+      item:entry.item,unit:entry.unit,notes:entry.notes,month:entry.month,currency:entry.currency,originalRate:entry.originalRate,fx:entry.fx,
       U:chargeRateFor(entry,'U'),L:chargeRateFor(entry,'L'),UL:chargeRateFor(entry,'UL'),date:entry.date??null,periodEnd:entry.periodEnd??null,
       quantity:entry.quantity??1,vehicle:entry.vehicle??null
     }))]))
@@ -2958,7 +2991,7 @@ async function movementCostingOperations(month){
 }
 async function saveMonthlyPayroll(records,hours,fromUpload=false){
   const month=el('payrollMonth').value;
-  if(!canManagePayroll()||payrollWriting||!month||month!==loadedPayrollMonth)throw new Error('Load the payroll month before saving.');
+  if(!(fromUpload?canManagePayroll():canEditCosting())||payrollWriting||!month||month!==loadedPayrollMonth)throw new Error('Load the payroll month before saving.');
   if(!(hours>0&&hours<=744))throw new Error('Enter valid paid hours for this month.');
   payrollWriting=true;
   el('payrollMonth').disabled=true;
@@ -3579,10 +3612,10 @@ el('costForm').addEventListener('click',event=>{
   if(!box)return;
   const input=box.querySelector('input');
   const key=box.dataset.rate;
-  if(key==='hours'&&!canManagePayroll())return;
+  if(key==='hours'&&!canEditCosting())return;
   if(button.matches('[data-edit-rate]'))setEditing(box,[input],true,'[data-edit-rate]','[data-save-rate]');
   if(button.matches('[data-save-rate]')&&key==='hours'){
-    if(!input.reportValidity()||!canManagePayroll())return;
+    if(!input.reportValidity()||!canEditCosting())return;
     if(loadedRevision){
       void saveMonthlyPayroll(new Map(payrollMaster),Number(input.value)).catch(error=>{el('payrollUploadResult').textContent=error.message;});
     }else{
@@ -3601,7 +3634,7 @@ el('payrollRows').addEventListener('input',event=>{
 });
 el('payrollRows').addEventListener('click',async event=>{
   const button=event.target.closest('button');
-  if(!button||!canManagePayroll()||payrollWriting)return;
+  if(!button||!canEditCosting()||payrollWriting)return;
   const row=button.closest('tr');
   const fields=[...row.querySelectorAll('[data-field]')];
   const previous=row.dataset.epf;
