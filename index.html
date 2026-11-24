@@ -904,9 +904,11 @@ html.guest-dashboard :is(#openCosts,.costing-report-links,#monthlyCosts,#combine
 #payrollLogin .staff-field-error:empty{display:none}
 #payrollLoginStatus[data-error]{color:#a33d45}
 #payrollLogin input[aria-invalid="true"]{border-color:#cd7980}
+#payrollLogin .staff-reset-action{margin:8px 0 0;text-align:right}
+#payrollLogin .staff-reset-action button:not([hidden]){width:auto;background:transparent;color:#086670;border:0;box-shadow:none;padding:3px 0;text-decoration:underline;font-size:13px}
 </style>
 <header class="dashboard-header"><div class="job-header-actions"><div class="header-scope"><label><span>Customer</span><select id="customer"></select></label>
-<label><span>Job</span><select id="job"></select></label></div><div class="costing-report-links"><button id="openCosts" type="button" aria-haspopup="dialog"><svg class="ui-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" aria-hidden="true"><rect x="5" y="3" width="14" height="18" rx="2"/><path d="M8 8h8m-8 4h2m4 0h2m-8 4h2m4 0h2"/></svg>Job Costing</button><a href="./labour-report.html">Labour Report</a></div><p id="payrollSession" role="status"></p><button id="payrollSignIn" type="button">Staff Sign In</button><button id="payrollSignOut" type="button" hidden>Sign out</button></div><div class="dashboard-title"><img class="gtl-header-logo" src="./logo-header.png?v=golden-cost-logo" width="512" height="460" alt="GTL Job Costing"><div><p class="dashboard-brand">Global Transportation and PVT LTD</p><h1>Warehouse Operations &amp; Job Costing</h1><small>Vehicle turnaround, crew hours and job costs</small></div></div>
+<label><span>Job</span><select id="job"></select></label></div><div class="costing-report-links"><button id="openCosts" type="button" aria-haspopup="dialog"><svg class="ui-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" aria-hidden="true"><rect x="5" y="3" width="14" height="18" rx="2"/><path d="M8 8h8m-8 4h2m4 0h2m-8 4h2m4 0h2"/></svg>Job Costing</button><a href="./labour-report.html">Labour Report</a></div><p id="payrollSession" role="status"></p><button id="payrollSignIn" type="button">Management Login</button><button id="payrollSignOut" type="button" hidden>Sign out</button></div><div class="dashboard-title"><img class="gtl-header-logo" src="./logo-header.png?v=golden-cost-logo" width="512" height="460" alt="GTL Job Costing"><div><p class="dashboard-brand">Global Transportation and PVT LTD</p><h1>Warehouse Operations &amp; Job Costing</h1><small>Vehicle turnaround, crew hours and job costs</small></div></div>
 <section class="panel filters" aria-label="Dashboard filters">
 <label>Month<input id="monthFilter" type="month"></label>
 <label>Week<select id="week"></select></label>
@@ -940,7 +942,7 @@ html.guest-dashboard :is(#openCosts,.costing-report-links,#monthlyCosts,#combine
 <p>Global Park</p><strong>Warehouse Operations<br>&amp; Job Costing</strong></section>
 <div class="staff-login-panel">
 <form method="dialog"><button class="close" aria-label="Close sign-in">Close</button></form>
-<h2 id="staffLoginHeading">Staff Sign In</h2>
+<h2 id="staffLoginHeading">Management Login</h2>
 <p id="staffLoginDescription">Enter your email and password.</p>
 <p id="staffEmailField"><label for="payrollEmail">Email address <span id="staffEmailCheck" aria-label="Valid email format" hidden>✓</span></label><input id="payrollEmail" aria-describedby="staffEmailError" type="email" required autocomplete="username" list="staffEmailSuggestions" form="staffPasswordForm"><span id="staffEmailError" class="staff-field-error" role="status"></span></p>
 <datalist id="staffEmailSuggestions"></datalist>
@@ -948,16 +950,18 @@ html.guest-dashboard :is(#openCosts,.costing-report-links,#monthlyCosts,#combine
 <label>Password<input id="staffPassword" aria-describedby="staffPasswordError" type="password" required autocomplete="current-password"></label><p id="staffPasswordError" class="staff-field-error" role="status"></p>
 <label class="staff-remember"><input id="staffRemember" type="checkbox" checked> Remember me</label>
 <button type="submit">Sign in</button>
+<p class="staff-reset-action"><button type="button" id="staffForgotPassword">Forgot password?</button></p>
 </form>
 <form id="payrollLoginForm" hidden>
 <label>Slide right to verify your email
 <input id="staffVerifySlider" type="range" min="0" max="100" value="0" aria-label="Slide right to send sign-in link"></label>
 <button type="submit" class="staff-keyboard-submit">Verify email</button>
 </form>
+<form id="staffRecoveryForm" hidden><button type="submit">Send password reset link</button></form>
 <form id="staffSetupForm" hidden>
 <label>New password<input id="staffNewPassword" type="password" required minlength="6" autocomplete="new-password"></label>
 <label>Confirm password<input id="staffConfirmPassword" type="password" required minlength="6" autocomplete="new-password"></label>
-<button type="submit">Set password and sign in</button>
+<button type="submit" id="staffSetupSubmit">Set password and sign in</button>
 </form>
 <p id="payrollLoginStatus" role="status"></p>
 <div class="staff-login-actions"><button type="button" id="staffNewUser">New User</button>
@@ -2183,7 +2187,8 @@ const payrollConnection=[
   'sb_publishable_4CS6L84JSXxjm1TPUJWbCQ_ZwUwjzTm',
 ];
 const staffLinkCallback=new URLSearchParams(location.hash.slice(1));
-const isStaffLinkReturn=staffLinkCallback.has('access_token')&&['magiclink','signup','email'].includes(staffLinkCallback.get('type'));
+const isStaffRecoveryReturn=staffLinkCallback.has('access_token')&&staffLinkCallback.get('type')==='recovery';
+const isStaffLinkReturn=isStaffRecoveryReturn||(staffLinkCallback.has('access_token')&&['magiclink','signup','email'].includes(staffLinkCallback.get('type')));
 const staffRememberKey='gtl-staff-remember';
 function rememberSessionEnabled(){
   try{return localStorage.getItem(staffRememberKey)!=='0';}catch{return false;}
@@ -2955,24 +2960,37 @@ function staffSetupPending(uid){
   try{return Boolean(uid)&&localStorage.getItem(staffSetupKey)===uid;}catch{return false;}
 }
 function setStaffStage(stage){
-  const setup=stage==='password';
+  const resetting=stage==='reset';
+  const setup=stage==='password'||resetting;
+  const recovery=stage==='recovery';
   const returning=stage==='sign-in';
   el('staffPasswordForm').hidden=!returning;
-  el('payrollLoginForm').hidden=setup||returning;
+  el('payrollLoginForm').hidden=setup||returning||recovery;
+  el('staffRecoveryForm').hidden=!recovery;
+  el('staffForgotPassword').hidden=!returning;
+  el('staffSetupSubmit').textContent=resetting?'Save new password':'Set password and sign in';
   el('staffSetupForm').hidden=!setup;
   el('staffEmailField').hidden=setup;
   el('payrollEmail').disabled=setup;
-  el('payrollEmail').setAttribute('form',returning?'staffPasswordForm':'payrollLoginForm');
+  el('payrollEmail').setAttribute('form',returning?'staffPasswordForm':recovery?'staffRecoveryForm':'payrollLoginForm');
   el('staffUsePassword').hidden=setup||returning;
   el('staffNewUser').hidden=!returning;
-  el('staffLoginHeading').textContent=setup?'Create your password':returning?'Staff Sign In':'Verify your email';
-  el('staffLoginDescription').textContent=setup?'Your email is verified. Create a password for future sign-ins.':returning?'Enter your email and password.':'Use your approved email to receive a sign-in link.';
+  el('staffLoginHeading').textContent=resetting?'Set a new password':setup?'Create your password':recovery?'Reset your password':returning?'Management Login':'Verify your email';
+  el('staffLoginDescription').textContent=resetting?'Set a new password for your GTL account.':setup?'Email verified. Create your password to continue.':recovery?'Enter your account email to receive a reset link.':returning?'Enter your email and password.':'Use your approved email to receive a sign-in link.';
 }
 function rememberStaffEmail(email){
   try{localStorage.setItem(staffEmailKey,email);}catch{}
 }
-function openStaffWelcome(user){
-  el('staffWelcomeName').textContent=user.email?.toLowerCase()===pilotStaffEmail?'Sandun Prasanna':user.email||'';
+function rememberedStaffEmail(){
+  try{return localStorage.getItem(staffEmailKey)?.trim().toLowerCase()||'';}catch{return '';}
+}
+async function openStaffWelcome(user){
+  let name=user.email?.toLowerCase()===pilotStaffEmail?'Sandun Prasanna':user.email||'';
+  try{
+    const {data,error}=await payrollClient.rpc('gtl_dashboard_display_name');
+    if(!error&&typeof data==='string'&&data.trim())name=data;
+  }catch{}
+  el('staffWelcomeName').textContent=name;
   staffWelcomePending=true;
   holdDashboard();
   el('payrollLogin').close();
@@ -3044,6 +3062,23 @@ el('staffNewUser').addEventListener('click',()=>{
   setStaffStage('email');
   el('payrollEmail').focus();
 });
+el('staffForgotPassword').addEventListener('click',()=>{
+  resetStaffFieldErrors();
+  el('payrollLoginStatus').textContent='';
+  el('staffPassword').value='';
+  setStaffStage('recovery');
+  el('payrollEmail').focus();
+});
+el('staffRecoveryForm').addEventListener('submit',event=>{
+  event.preventDefault();
+  void runStaffAction(async status=>{
+    const email=el('payrollEmail').value.trim().toLowerCase();
+    const redirectTo=new URL(location.pathname,location.origin).href;
+    const {error}=await payrollClient.auth.resetPasswordForEmail(email,{redirectTo});
+    if(error&&error.code!=='user_not_found')throw error;
+    status.textContent='If this email is registered, a password reset link will arrive shortly.';
+  });
+});
 el('staffUsePassword').addEventListener('click',()=>{
   el('payrollLoginStatus').textContent='';
   setStaffStage('sign-in');
@@ -3091,7 +3126,7 @@ el('staffPasswordForm').addEventListener('submit',event=>{
     const {data,error}=await payrollClient.auth.signInWithPassword({email,password:el('staffPassword').value});
     if(error){
       if(error.code==='invalid_credentials'||error.message==='Invalid login credentials'){
-        staffFieldError('staffPassword','staffPasswordError','Email or password is incorrect.');
+        staffFieldError('staffPassword','staffPasswordError',email===rememberedStaffEmail()?'Password incorrect.':'Email or password is incorrect.');
         return;
       }
       throw error;
@@ -3099,7 +3134,7 @@ el('staffPasswordForm').addEventListener('submit',event=>{
     try{await requireStaffRole(data.user);}
     catch(error){await payrollClient.auth.signOut({scope:'local'});throw error;}
     rememberStaffEmail(email);
-    openStaffWelcome(data.user);
+    await openStaffWelcome(data.user);
   });
 });
 const verifySlider=el('staffVerifySlider');
@@ -3141,7 +3176,7 @@ el('payrollLoginForm').addEventListener('submit',event=>{
     }finally{emailInput.readOnly=false;}
   });
 });
-async function finishStaffLink(){
+async function finishStaffLink(recovery=isStaffRecoveryReturn){
   const status=el('payrollLoginStatus');
   try{
     const {data,error}=await payrollClient.auth.getUser();
@@ -3151,7 +3186,7 @@ async function finishStaffLink(){
     if(!el('payrollLogin').open)el('payrollLogin').showModal();
     await requireStaffRole(data.user);
     markStaffSetup(data.user.id);
-    setStaffStage('password');
+    setStaffStage(recovery?'reset':'password');
     status.textContent='';
     el('staffNewPassword').focus();
   }catch(error){
@@ -3174,7 +3209,7 @@ el('staffSetupForm').addEventListener('submit',event=>{
     verifiedStaffUid='';
     markStaffSetup(false);
     rememberStaffEmail(sessionData.user.email);
-    openStaffWelcome(sessionData.user);
+    await openStaffWelcome(sessionData.user);
   });
 });
 async function refreshSharedPayroll(){
@@ -3633,10 +3668,14 @@ if(payrollClient){
   void refreshPublishedJobCosts();
   void refreshSharedAreas();
   payrollClient.auth.onAuthStateChange((event,session)=>{
-    if(!['INITIAL_SESSION','SIGNED_IN','SIGNED_OUT'].includes(event))return;
+    if(!['INITIAL_SESSION','SIGNED_IN','SIGNED_OUT','PASSWORD_RECOVERY'].includes(event))return;
     setTimeout(()=>{
       const user=session?.user??null;
       setPayrollSession(user);
+      if(event==='PASSWORD_RECOVERY'){
+        if(user&&!isStaffRecoveryReturn)void finishStaffLink(true);
+        return;
+      }
       if(event!=='INITIAL_SESSION')return;
       if(isStaffLinkReturn||staffSetupPending(user?.id)){
         if(user)void finishStaffLink();
