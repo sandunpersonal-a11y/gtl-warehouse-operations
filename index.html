@@ -834,6 +834,34 @@ button,input,select,textarea,::file-selector-button{font-family:inherit}
 #staffWelcome p{font-weight:700}
 html.staff-entry :is(.dashboard-header,main,.dashboard-credit){visibility:hidden}
 html.staff-entry #payrollLogin .close{display:none}
+
+html.staff-entry{background:radial-gradient(ellipse at 75% 15%,#12616a 0%,#153650 44%,#102a43 80%) fixed}
+#payrollLogin{padding:0;overflow:auto;width:min(760px,calc(100vw - 24px));max-height:90vh;border:1px solid #16848e;border-radius:16px;background:#f7faff;box-shadow:0 22px 60px #07182880}
+#payrollLogin[open]{display:grid;grid-template-columns: minmax(0, .85fr) minmax(0,1.15fr)}
+#payrollLogin::backdrop{background:#102a4366}
+.staff-login-brand{padding:27px;background:linear-gradient(150deg,#102a43,#124055 55%,#087b83);color:#fff;display:flex;flex-direction:column;justify-content:center}
+.staff-login-brand img{width:64px;height:auto}
+.staff-login-brand p{margin:13px 0 5px;color:#bce5e8;font-weight:700}
+.staff-login-brand strong{font-size:1.4rem;line-height:1.2}
+.staff-login-panel{padding:21px 25px;min-width:0;color:#102a43}
+.staff-login-panel h2{margin:0 0 5px;font-size:1.32rem}
+#staffLoginDescription{margin:0 0 12px;color:#486278}
+#staffEmailField{margin:0}
+#payrollLogin :is(p,button)[hidden]{display:none}
+#payrollLogin input:not([type=range]){min-height:38px;padding:6px 9px;border:1px solid #b4c9da;border-radius:6px}
+#payrollLogin form:not([method=dialog]) button{background:#087b83;color:white;border:1px solid #087b83}
+.staff-login-actions{display:flex;flex-wrap:wrap;gap:6px}
+#payrollLoginStatus:empty{display:none}
+.staff-login-actions button{width:auto}
+@media(max-width:620px){
+  #payrollLogin[open]{grid-template-columns:1fr}
+  .staff-login-brand{padding:13px 18px;display:grid;grid-template-columns:44px 1fr;column-gap:12px}
+  .staff-login-brand img{width:44px;grid-row:span 2}
+  .staff-login-brand p{margin:0}
+  .staff-login-brand br{display:none}
+  .staff-login-brand strong{font-size:1rem}
+  .staff-login-panel{padding:15px 18px}
+}
 </style>
 <header class="dashboard-header"><div class="job-header-actions"><div class="header-scope"><label><span>Customer</span><select id="customer"></select></label>
 <label><span>Job</span><select id="job"></select></label></div><div class="costing-report-links"><button id="openCosts" type="button" aria-haspopup="dialog"><svg class="ui-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" aria-hidden="true"><rect x="5" y="3" width="14" height="18" rx="2"/><path d="M8 8h8m-8 4h2m4 0h2m-8 4h2m4 0h2"/></svg>Job Costing</button><a href="./labour-report.html">Labour Report</a></div><p id="payrollSession" role="status"></p><button id="payrollSignIn" type="button">Staff Sign In</button><button id="payrollSignOut" type="button" hidden>Sign out</button></div><div class="dashboard-title"><img class="gtl-header-logo" src="./logo-header.png?v=golden-cost-logo" width="512" height="460" alt="GTL Job Costing"><div><p class="dashboard-brand">Global Transportation and PVT LTD</p><h1>Warehouse Operations &amp; Job Costing</h1><small>Vehicle turnaround, crew hours and job costs</small></div></div>
@@ -864,16 +892,21 @@ html.staff-entry #payrollLogin .close{display:none}
 </main>
 <footer class="dashboard-credit">Designed and developed by <strong>Sandun Jayaweera</strong></footer>
 
-<dialog id="payrollLogin"><form method="dialog"><button class="close">Close</button></form>
-<h2>Staff Sign In</h2>
-<form id="staffPasswordForm">
-<label>Email<input id="payrollEmail" type="email" required autocomplete="username" list="staffEmailSuggestions"></label>
+<dialog id="payrollLogin" aria-labelledby="staffLoginHeading">
+<section class="staff-login-brand"><img src="./logo-header.png?v=golden-cost-logo" alt="GTL">
+<p>Global Park</p><strong>Warehouse Operations<br>&amp; Job Costing</strong></section>
+<div class="staff-login-panel">
+<form method="dialog"><button class="close" aria-label="Close sign-in">Close</button></form>
+<h2 id="staffLoginHeading">Verify your email</h2>
+<p id="staffLoginDescription">Use your approved email to receive a sign-in link.</p>
+<p id="staffEmailField"><label for="payrollEmail">Email address</label><input id="payrollEmail" type="email" required autocomplete="username" list="staffEmailSuggestions" form="payrollLoginForm"></p>
 <datalist id="staffEmailSuggestions"></datalist>
+<form id="staffPasswordForm" hidden>
 <label>Password<input id="staffPassword" type="password" required autocomplete="current-password"></label>
 <button type="submit">Sign in</button>
 </form>
 <form id="payrollLoginForm">
-<label>First time? Slide right to verify your email
+<label>Slide right to verify your email
 <input id="staffVerifySlider" type="range" min="0" max="100" value="0" aria-label="Slide right to send sign-in link"></label>
 <button type="submit">Send sign-in link</button>
 </form>
@@ -883,8 +916,9 @@ html.staff-entry #payrollLogin .close{display:none}
 <button type="submit">Set password and sign in</button>
 </form>
 <p id="payrollLoginStatus" role="status"></p>
-<button type="button" id="staffContinuePublic">Continue as Public</button>
-</dialog>
+<div class="staff-login-actions"><button type="button" id="staffContinuePublic">Continue as Public</button>
+<button type="button" id="staffUsePassword">Already set a password?</button></div>
+</div></dialog>
 <dialog id="staffWelcome" aria-labelledby="staffWelcomeHeading">
 <h2 id="staffWelcomeHeading">Job Costing Management Dashboard</h2>
 <p>Sandun Prasanna</p>
@@ -2805,9 +2839,17 @@ function staffSetupPending(){
   try{return localStorage.getItem(staffSetupKey)==='1';}catch{return false;}
 }
 function setStaffStage(stage){
-  el('staffPasswordForm').hidden=stage!=='email';
-  el('payrollLoginForm').hidden=stage!=='email';
-  el('staffSetupForm').hidden=stage!=='password';
+  const setup=stage==='password';
+  const returning=stage==='sign-in';
+  el('staffPasswordForm').hidden=!returning;
+  el('payrollLoginForm').hidden=setup||returning;
+  el('staffSetupForm').hidden=!setup;
+  el('staffEmailField').hidden=setup;
+  el('payrollEmail').disabled=setup;
+  el('payrollEmail').setAttribute('form',returning?'staffPasswordForm':'payrollLoginForm');
+  el('staffUsePassword').hidden=setup||returning;
+  el('staffLoginHeading').textContent=setup?'Create your password':returning?'Staff Sign In':'Verify your email';
+  el('staffLoginDescription').textContent=setup?'Your email is verified. Create a password for future sign-ins.':returning?'Enter your email and password.':'Use your approved email to receive a sign-in link.';
 }
 function rememberStaffEmail(email){
   try{localStorage.setItem(staffEmailKey,email);}catch{}
@@ -2840,10 +2882,15 @@ function showStaffEntry(){
   el('staffEmailSuggestions').replaceChildren(...suggestions.map(value=>new Option(value)));
   el('payrollEmail').value=saved;
   el('payrollLoginStatus').textContent='';
-  setStaffStage('email');
+  setStaffStage(saved&&!staffSetupPending()?'sign-in':'email');
   if(!el('payrollLogin').open)el('payrollLogin').showModal();
 }
 el('payrollSignIn').addEventListener('click',showStaffEntry);
+el('staffUsePassword').addEventListener('click',()=>{
+  el('payrollLoginStatus').textContent='';
+  setStaffStage('sign-in');
+  el('payrollEmail').focus();
+});
 el('staffWelcome').addEventListener('close',()=>{
   staffWelcomePending=false;
   revealDashboard();
@@ -2872,7 +2919,9 @@ el('payrollLogin').addEventListener('close',()=>{
 });
 el('payrollSignOut').addEventListener('click',async()=>{
   const {error}=await payrollClient.auth.signOut({scope:'local'});
-  if(error)el('payrollSession').textContent=error.message;
+  if(error){el('payrollSession').textContent=error.message;return;}
+  holdDashboard();
+  showStaffEntry();
 });
 el('staffPasswordForm').addEventListener('submit',event=>{
   event.preventDefault();
