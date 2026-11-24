@@ -802,12 +802,14 @@ button,input,select,textarea,::file-selector-button{font-family:inherit}
 .combined-fill i:last-child{color:#241709}
 #combinedTimeline .combined-table{min-width:650px}
 #combinedTimeline .combined-table :is(th,td){text-align:center;padding:3px 5px}
-#combinedTimeline .combined-table thead th:nth-child(2){width:104px}
-#combinedTimeline .combined-track{width:92px;height:11px;margin-inline:auto}
+#combinedTimeline .combined-table thead th:nth-child(2){width:16%}
+#combinedTimeline .combined-track{width:100%;height:11px;margin-inline:auto}
 #combinedTimeline .combined-fill i{font-size:.52rem}
 #combinedTimeline .combined-table td small{margin:0}
 .combined-note details{padding:3px 0;border-bottom:1px solid #e8eef4}
 .combined-note details p{margin:3px 0 3px 13px}
+.combined-note [data-export-payroll-issues]{width:auto;margin:6px 0 0;padding:4px 8px;font-size:.74rem}
+.combined-export-status:empty{display:none}
 </style>
 <header class="dashboard-header"><div class="job-header-actions"><div class="header-scope"><label><span>Customer</span><select id="customer"></select></label>
 <label><span>Job</span><select id="job"></select></label></div><div class="costing-report-links"><button id="openCosts" type="button" aria-haspopup="dialog"><svg class="ui-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" aria-hidden="true"><rect x="5" y="3" width="14" height="18" rx="2"/><path d="M8 8h8m-8 4h2m4 0h2m-8 4h2m4 0h2"/></svg>Job Costing</button><a href="./labour-report.html">Labour Report</a></div><p id="payrollSession" role="status"></p><button id="payrollSignIn" type="button">Payroll sign in</button><button id="payrollSignOut" type="button" hidden>Sign out</button></div><div class="dashboard-title"><img class="gtl-header-logo" src="./logo-header.png?v=golden-cost-logo" width="512" height="460" alt="GTL Job Costing"><div><p class="dashboard-brand">Global Transportation and PVT LTD</p><h1>Warehouse Operations &amp; Job Costing</h1><small>Vehicle turnaround, crew hours and job costs</small></div></div>
@@ -1545,24 +1547,30 @@ function monthlyExcelSheets(report,customer,job,crews,publications){
     ...[['Loading',report.loading],['Unloading',report.unloading]].map(([label,cost])=>[label,cost.sqft,cost.rate??null,cost.areaCost])];
   return [['Summary',summary],['Vehicles',vehicles],['Labour and EPF',labour],...(report.figures.some(([kind])=>kind==='area')?[['Monthly Area',monthlyArea]]:[]),['Other Charges',charges]];
 }
-async function buildMonthlyExcel(sheets){
+async function buildMonthlyExcel(sheets,{blueHeader=false}={}){
   const zip=new JSZip();
   const ns='http://schemas.openxmlformats.org';
   const rel=ns+'/officeDocument/2006/relationships';
   const content='application/vnd.openxmlformats-officedocument.spreadsheetml';
   const xml=value=>esc(String(value).replace(/[\x00-\x08\x0b\x0c\x0e-\x1f]/g,''));
   const relationships=items=>`<Relationships xmlns="${ns}/package/2006/relationships">${items.map(([id,type,target])=>`<Relationship Id="${id}" Type="${rel}/${type}" Target="${target}"/>`).join('')}</Relationships>`;
-  zip.file('[Content_Types].xml',`<Types xmlns="${ns}/package/2006/content-types"><Default Extension="rels" ContentType="application/vnd.openxmlformats-package.relationships+xml"/><Default Extension="xml" ContentType="application/xml"/><Override PartName="/xl/workbook.xml" ContentType="${content}.sheet.main+xml"/>${sheets.map((_,i)=>`<Override PartName="/xl/worksheets/sheet${i+1}.xml" ContentType="${content}.worksheet+xml"/>`).join('')}</Types>`);
+  zip.file('[Content_Types].xml',`<Types xmlns="${ns}/package/2006/content-types"><Default Extension="rels" ContentType="application/vnd.openxmlformats-package.relationships+xml"/><Default Extension="xml" ContentType="application/xml"/>${blueHeader?'<Override PartName="/xl/styles.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.styles+xml"/>':''}<Override PartName="/xl/workbook.xml" ContentType="${content}.sheet.main+xml"/>${sheets.map((_,i)=>`<Override PartName="/xl/worksheets/sheet${i+1}.xml" ContentType="${content}.worksheet+xml"/>`).join('')}</Types>`);
   zip.file('_rels/.rels',relationships([['rId1','officeDocument','xl/workbook.xml']]));
   zip.file('xl/workbook.xml',`<workbook xmlns="${ns}/spreadsheetml/2006/main" xmlns:r="${rel}"><sheets>${sheets.map(([name],i)=>`<sheet name="${xml(name)}" sheetId="${i+1}" r:id="rId${i+1}"/>`).join('')}</sheets></workbook>`);
-  zip.file('xl/_rels/workbook.xml.rels',relationships(sheets.map((_,i)=>[`rId${i+1}`,'worksheet',`worksheets/sheet${i+1}.xml`])));
+  const sheetLinks=sheets.map((_,i)=>[`rId${i+1}`,'worksheet',`worksheets/sheet${i+1}.xml`]);
+  if(blueHeader){
+    sheetLinks.push([`rId${sheets.length+1}`,'styles','styles.xml']);
+    zip.file('xl/styles.xml',`<styleSheet xmlns="${ns}/spreadsheetml/2006/main"><fonts count="2"><font><sz val="11"/><name val="Calibri"/></font><font><b/><color rgb="FFFFFFFF"/><sz val="11"/><name val="Calibri"/></font></fonts><fills count="3"><fill><patternFill patternType="none"/></fill><fill><patternFill patternType="gray125"/></fill><fill><patternFill patternType="solid"><fgColor rgb="FF173E60"/><bgColor indexed="64"/></patternFill></fill></fills><borders count="1"><border/></borders><cellStyleXfs count="1"><xf/></cellStyleXfs><cellXfs count="2"><xf xfId="0"/><xf xfId="0" fontId="1" fillId="2" applyFont="1" applyFill="1"/></cellXfs><cellStyles count="1"><cellStyle name="Normal" xfId="0" builtinId="0"/></cellStyles></styleSheet>`);
+  }
+  zip.file('xl/_rels/workbook.xml.rels',relationships(sheetLinks));
   sheets.forEach(([,rows],i)=>{
     const body=rows.map((row,j)=>`<row r="${j+1}">${row.map((cell,k)=>{
       if(cell==null)return '';
       const address=String.fromCharCode(65+k)+(j+1);
-      return Number.isFinite(cell)?`<c r="${address}"><v>${cell}</v></c>`:`<c r="${address}" t="inlineStr"><is><t xml:space="preserve">${xml(cell)}</t></is></c>`;
+      const style=blueHeader&&j<2?' s="1"':'';
+      return Number.isFinite(cell)?`<c r="${address}"${style}><v>${cell}</v></c>`:`<c r="${address}"${style} t="inlineStr"><is><t xml:space="preserve">${xml(cell)}</t></is></c>`;
     }).join('')}</row>`).join('');
-    zip.file(`xl/worksheets/sheet${i+1}.xml`,`<worksheet xmlns="${ns}/spreadsheetml/2006/main"><cols><col min="1" max="14" width="22" customWidth="1"/></cols><sheetData>${body}</sheetData></worksheet>`);
+    zip.file(`xl/worksheets/sheet${i+1}.xml`,`<worksheet xmlns="${ns}/spreadsheetml/2006/main"><cols><col min="1" max="${blueHeader?8:14}" width="22" customWidth="1"/>${blueHeader?'<col min="9" max="9" width="60" customWidth="1"/>':''}</cols><sheetData>${body}</sheetData>${blueHeader?`<autoFilter ref="A2:I${rows.length}"/><mergeCells count="1"><mergeCell ref="A1:I1"/></mergeCells>`:''}</worksheet>`);
   });
   return zip.generateAsync({type:'blob',compression:'DEFLATE',mimeType:content+'.sheet'});
 }
@@ -2210,41 +2218,79 @@ function combinedTimelineSummary(visits){
   }),{day:0,ot:0,dayCents:0,otCents:0,priced:false});
   return {roles,total,partial};
 }
-function combinedPayrollNotes(visits){
-  if(!payrollUser)return '';
-  const incomplete=visits.filter(visit=>!operationPublication(visit)?.complete);
-  if(!canManagePayroll())return `<p class="combined-note">Incomplete payroll costing · ${incomplete.length} operations</p>`;
-  const items=incomplete.map(visit=>{
+let combinedIssueRows=[];
+function combinedPayrollIssues(visits){
+  return visits.filter(visit=>!operationPublication(visit)?.complete).map(visit=>{
     const month=visit.start.slice(0,7);
     requestDiagnosticPayroll(month);
     if(visit.crewPrivate)requestMovementCrew(month);
     const payroll=diagnosticPayrollByMonth.get(month);
     const crew=visibleVehicleCrew(visit);
     const ids=[...new Set(crewRoles.flatMap(([,field])=>(crew?.[field]??[]).map(payrollEpf)).filter(epf=>/^\d+$/.test(epf)&&epf!=='0'))];
-    const reasons=[];
-    if(!splitWorkingMinutes(visit.start,visit.end))reasons.push('Invalid or missing Start / End time');
-    if(payroll?.status==='unavailable')reasons.push('Payroll lookup unavailable');
-    else if(payroll?.status!=='ready')reasons.push('Checking payroll');
-    else if(!payroll.hours)reasons.push('Monthly paid hours unavailable');
-    else if(crew){
-      const missing=ids.filter(epf=>!payroll.records.has(epf));
-      const rates=ids.filter(epf=>{
-        const person=payroll.records.get(epf);
-        return person&&(!knownAmount(regularPay(person))||!knownAmount(person.basic));
-      });
-      if(missing.length)reasons.push('Missing payroll EPF '+missing.join(', '));
-      if(rates.length)reasons.push('Missing pay rate · EPF '+rates.join(', '));
+    const issues=[];
+    const add=(reason,epf='')=>issues.push({reason,epf});
+    const hasTime=value=>value?.includes('T')&&Number.isFinite(Date.parse(value+'Z'));
+    if(!hasTime(visit.start))add('Start time missing or invalid');
+    if(!hasTime(visit.end))add('Finish time missing or invalid');
+    if(hasTime(visit.start)&&hasTime(visit.end)&&!splitWorkingMinutes(visit.start,visit.end))add('Finish time is before Start');
+    if(payroll?.status==='unavailable')add('Payroll lookup unavailable');
+    else if(payroll?.status!=='ready')add('Checking payroll');
+    else if(!payroll.hours)add('Monthly paid hours unavailable');
+    else for(const epf of ids){
+      const person=payroll.records.get(epf);
+      if(!person)add('EPF recorded in crew list but missing from monthly payroll',epf);
+      else if(!knownAmount(regularPay(person))||!knownAmount(person.basic))add('Payroll rate missing',epf);
     }
-    if(!crew)reasons.push(movementCrewByMonth.get(month)?.status==='unavailable'?'Crew lookup unavailable':'Checking crew assignments');
-    else if(!ids.length)reasons.push('Crew EPFs unavailable');
-    if(!reasons.length)reasons.push(operationPublication(visit)?'Published costing incomplete':'Published cost unavailable');
-    const label=`Reg ${visit.reg} · ${visit.vehicle} · ${reasons[0]}`;
-    const context=`${visit.customer} / ${visit.job} · ${operationName(visit.direction)} · ${stamp(visit.start)} → ${stamp(visit.end)}`;
-    return `<details><summary>${esc(label)}</summary><p>${esc(context)}${ids.length?' · Crew EPF '+esc(ids.join(', ')):''}
-      ${reasons.length>1?'<br>'+esc(reasons.slice(1).join(' · ')):''}</p></details>`;
-  }).join('');
-  return `<details class="combined-note"><summary>Payroll issues · ${incomplete.length} operations</summary>${items}</details>`;
+    if(!crew)add(movementCrewByMonth.get(month)?.status==='unavailable'?'Crew lookup unavailable':'Checking crew assignments');
+    else if(!ids.length)add('Crew EPFs unavailable');
+    if(!issues.length)add(operationPublication(visit)?'Published costing incomplete':'Published cost unavailable');
+    return {visit,issues};
+  });
 }
+function combinedPayrollNotes(visits){
+  combinedIssueRows=[];
+  if(!payrollUser)return '';
+  if(!canManagePayroll())return `<p class="combined-note">Incomplete payroll costing · ${visits.filter(visit=>!operationPublication(visit)?.complete).length} operations</p>`;
+  combinedIssueRows=combinedPayrollIssues(visits);
+  const pending=combinedIssueRows.some(({issues})=>issues.some(({reason})=>reason.startsWith('Checking')));
+  const items=combinedIssueRows.map(({visit,issues})=>{
+    const label=`Reg ${visit.reg} · ${visit.vehicle} · ${issues[0].reason}`;
+    const context=`${visit.customer} / ${visit.job} · ${operationName(visit.direction)} · ${stamp(visit.start)} → ${stamp(visit.end)}`;
+    return `<details><summary>${esc(label)}</summary><p>${esc(context)}</p><ul>${issues.map(({reason,epf})=>`<li>${esc(reason)}${epf?' · EPF '+esc(epf):''}</li>`).join('')}</ul></details>`;
+  }).join('');
+  return `<details class="combined-note"><summary>Payroll issues · ${combinedIssueRows.length} operations</summary>${items}
+    <button type="button" data-export-payroll-issues ${pending?'disabled':''}>Download Payroll Issues Excel</button>
+    <p class="combined-export-status" role="status"></p></details>`;
+}
+el('combinedTimeline').addEventListener('click',async event=>{
+  const button=event.target.closest('[data-export-payroll-issues]');
+  if(!button||button.disabled||!canManagePayroll())return;
+  const user=payrollUser.id;
+  const rows=combinedIssueRows;
+  const timestamp=value=>String(value??'').replace('T',' ');
+  const sheets=[['L','Loading'],['U','Unloading']].map(([direction,label])=>[label,[
+    [label+' · Payroll Issues'],
+    ['Customer','Job','Dept Reg No.','Vehicle','Operation','Start','Finish','Issue EPF','Reason'],
+    ...rows.filter(({visit})=>visit.direction===direction)
+      .sort((a,b)=>a.visit.start.localeCompare(b.visit.start))
+      .flatMap(({visit,issues})=>issues.map(({epf,reason})=>[
+        visit.customer,String(visit.job),String(visit.reg),visit.vehicle,label,timestamp(visit.start),timestamp(visit.end),epf,reason
+      ]))
+  ]]);
+  const status=button.parentElement.querySelector('.combined-export-status');
+  button.disabled=true;
+  try{
+    const blob=await buildMonthlyExcel(sheets,{blueHeader:true});
+    if(!canManagePayroll()||payrollUser.id!==user||!button.isConnected)return;
+    const url=URL.createObjectURL(blob);
+    const link=document.createElement('a');
+    link.href=url;
+    link.download='GTL-Payroll-Issues.xlsx';
+    link.click();
+    setTimeout(()=>URL.revokeObjectURL(url),30000);
+  }catch(error){status.textContent='Could not create Excel report: '+error.message;}
+  finally{button.disabled=false;}
+});
 function renderCombinedTimeline(visits,selected){
   const section=el('combinedTimeline');
   if(selected||!showAreaForJobScope()||!visits.length){
@@ -2259,7 +2305,9 @@ function renderCombinedTimeline(visits,selected){
   const notes=partial?combinedPayrollNotes(visits):'';
   const noteArea=section.querySelector('.combined-notes');
   if(noteArea&&noteArea.dataset.markup!==notes){
+    const expanded=noteArea.querySelector('details')?.open;
     noteArea.innerHTML=notes;
+    if(expanded&&noteArea.querySelector('details'))noteArea.querySelector('details').open=true;
     noteArea.dataset.markup=notes;
   }
   if(key===combinedTimelineKey)return;
