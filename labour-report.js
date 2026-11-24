@@ -56,7 +56,8 @@ const roles=[['Supervisor','supervisors'],['Tally Clerk','tally'],['Operator','o
 const columns=['EPF','Designation','Loading vehicles','Unloading vehicles','Loading day h','Loading OT h','Unloading day h','Unloading OT h','Total day h','Day cost (LKR)','Total OT h','OT cost (LKR)','Paid day h','Idle / unallocated h','Total cost (LKR)'];
 const dayColumns=[4,6,8,9],otColumns=[5,7,10,11],moneyColumns=[9,11,14];
 const fmt=value=>value==null?'—':new Intl.NumberFormat('en-LK',{maximumFractionDigits:2}).format(value);
-function calculateReport(operations,records,paidHours){
+function calculateReport(operations,records,paidHours,designation){
+  const countsByDirection=[0,0];
   const staff=new Map();
   let missingCrew=0,missingTimes=0;
   for(const operation of operations){
@@ -64,11 +65,14 @@ function calculateReport(operations,records,paidHours){
     if(!split)missingTimes++;
     if(operation.crewPrivate)missingCrew++;
     const seen=new Set();
+    let counted=false;
     for(const [role,field] of roles){
       if(operation.crewPrivate)break;
       for(const epf of (operation[field]??[]).map(payrollEpf)){
         if(!/^\d+$/.test(epf)||epf==='0'||seen.has(epf))continue;
         seen.add(epf);
+        if(designation&&role!==designation)continue;
+        counted=true;
         const person=records.get(epf);
         if(!staff.has(epf))staff.set(epf,{person,role,counts:[0,0],minutes:[0,0,0,0],missingTime:false});
         const item=staff.get(epf);
@@ -80,6 +84,7 @@ function calculateReport(operations,records,paidHours){
         }else item.missingTime=true;
       }
     }
+    if(counted&&split)countsByDirection[operation.direction==='L'?0:1]++;
   }
   const rows=[...staff].sort(([a],[b])=>a.localeCompare(b,undefined,{numeric:true})).map(([epf,item])=>{
     const {person,role,counts,minutes,missingTime}=item;
@@ -90,7 +95,7 @@ function calculateReport(operations,records,paidHours){
     const dayCost=day===0&&!missingTime?0:paid&&regular!==null?day*regular/paid:null;
     const otCost=ot===0&&!missingTime?0:overtime!==null?ot*overtime:null;
     const cost=dayCost===null&&otCost===null?null:(dayCost??0)+(otCost??0);
-    return {values:[epf,person?.designation||role,...counts,...h,day,dayCost,ot,otCost,paid,
+    return {missingTime,values:[epf,designation||person?.designation||role,...counts,...h,day,dayCost,ot,otCost,paid,
       paid===null||missingTime?null:Math.max(0,paid-day),cost],incomplete:!person||missingTime||dayCost===null||otCost===null};
   });
   const totals=columns.map((_,index)=>{
@@ -99,7 +104,10 @@ function calculateReport(operations,records,paidHours){
     const values=rows.map(row=>row.values[index]).filter(Number.isFinite);
     return values.length?values.reduce((a,b)=>a+b,0):null;
   });
-  return {rows,totals,missingCrew,missingTimes};
+  const comparable=rows.filter(row=>row.values[12]>0&&!row.missingTime);
+  const day=comparable.reduce((sum,row)=>sum+row.values[8],0);
+  const paid=comparable.reduce((sum,row)=>sum+row.values[12],0);
+  return {rows,totals,missingCrew,missingTimes,countsByDirection,utilisation:paid?100*day/paid:null};
 }
 
 let operations=[],reportVersion=0,currentReport=null;
@@ -119,8 +127,6 @@ function renderReport(result){
   el('body').innerHTML=rows.map(row=>'<tr>'+row.values.map(cell).join('')+'</tr>').join('')||
     '<tr><td colspan="15">No employee assignments found for this selection.</td></tr>';
   el('foot').innerHTML='<tr>'+totals.map(cell).join('')+'</tr>';
-  el('metrics').innerHTML=[['Day hours',fmt(totals[8])],['OT hours',fmt(totals[10])],['Idle / unallocated hours',fmt(totals[13])],['Total labour cost',totals[14]===null?'—':money(totals[14])]]
-    .map(([label,value])=>`<div>${label}<strong>${value}</strong></div>`).join('');
   const ranked=rows.slice().sort((a,b)=>b.values[8]-a.values[8]).slice(0,10);
   const max=Math.max(1,...ranked.map(({values:r})=>r[8]+(r[13]??0)));
   el('chart').innerHTML=ranked.map(({values:r})=>{
@@ -133,31 +139,94 @@ function renderReport(result){
     missingTimes?`${missingTimes} operation(s) have missing or invalid timestamps.`:''].filter(Boolean).join(' ');
   el('download').disabled=!rows.length;
 }
+const monthLabel=(month,style='long')=>new Intl.DateTimeFormat('en',{month:style,year:'numeric',timeZone:'UTC'}).format(new Date(month+'-01T00:00:00Z'));
+const hours=value=>value==null?'—':fmt(value)+' h';
+const percent=value=>value==null?'—':fmt(value)+'%';
+const actual=result=>result?.totals[8]==null?null:result.totals[8]+result.totals[10];
+const operationsCount=result=>result?.rows.length?result.countsByDirection[0]+result.countsByDirection[1]:null;
+function tableMarkup(headers,rows){
+  return '<thead><tr>'+headers.map(item=>'<th scope="col">'+esc(item)+'</th>').join('')+'</tr></thead><tbody>'+
+    rows.map(row=>'<tr><th scope="row">'+esc(row[0])+'</th>'+row.slice(1).map(item=>'<td>'+esc(item)+'</td>').join('')+'</tr>').join('')+'</tbody>';
+}
+function renderOverview(history,result){
+  const months=[...history.keys()], current=months.at(-1), previous=months.at(-2), prior=history.get(previous);
+  document.querySelectorAll('[data-report-month]').forEach(node=>{node.textContent=monthLabel(current);node.dateTime=current;});
+  const metrics=[
+    ['Labour utilisation',result.utilisation,prior?.utilisation,percent,' pp'],
+    ['Actual labour hours',actual(result),actual(prior),hours,' h'],
+    ['Overtime hours',result.totals[10],prior?.totals[10],hours,' h'],
+    ['Vehicle operations',operationsCount(result),operationsCount(prior),fmt,'']
+  ];
+  el('metrics').innerHTML=metrics.map(([name,now,before,format,unit])=>{
+    const delta=now==null||before==null?null:now-before;
+    const change=delta==null?'Previous month unavailable':(delta>0?'+':'')+fmt(delta)+unit+' vs '+monthLabel(previous,'short');
+    return `<div>${esc(name)}<strong>${esc(format(now))}</strong><small>${esc(change)}</small></div>`;
+  }).join('');
+  el('comparison').innerHTML=tableMarkup(['Metric',monthLabel(previous,'short'),monthLabel(current,'short')],[
+    ...metrics.map(([name,now,before,format])=>[name,format(before),format(now)]),
+    ['Paid day hours',hours(prior?.totals[12]),hours(result.totals[12])],
+    ['Known labour cost',prior?.totals[14]==null?'—':money(prior.totals[14]),result.totals[14]==null?'—':money(result.totals[14])]
+  ]);
+  const values=[...history.values()].map(item=>item?.utilisation??null);
+  const ceiling=Math.max(100,Math.ceil(Math.max(...values.map(v=>v??0))/25)*25);
+  const x=index=>52+index*92, y=value=>111-92*value/ceiling;
+  if(values.some(value=>value!==null)){
+    const ticks=[0,ceiling/4,ceiling/2,ceiling*3/4,ceiling];
+    const grid=ticks.map(v=>`<path d="M43 ${y(v)}H525" stroke="#dbe6f1"/><text x="38" y="${y(v)+4}" text-anchor="end">${fmt(v)}%</text>`).join('');
+    const dots=values.map((v,i)=>v===null?'':`<circle cx="${x(i)}" cy="${y(v)}" r="4" fill="#245eb2"><title>${monthLabel(months[i])} · ${percent(v)}</title></circle><text x="${x(i)}" y="${y(v)-8}" text-anchor="middle">${percent(v)}</text>`).join('');
+    const segments=values.map((v,i)=>i>0&&v!==null&&values[i-1]!==null?`<path d="M${x(i-1)} ${y(values[i-1])}L${x(i)} ${y(v)}" stroke="#245eb2" stroke-width="2.5"/>`:'').join('');
+    const labels=months.map((m,i)=>`<text x="${x(i)}" y="133" text-anchor="middle">${monthLabel(m,'short')}</text>`).join('');
+    el('trend').innerHTML=`<svg class="plot" viewBox="0 0 540 140" role="img" aria-label="Six-month labour utilisation trend" fill="#435c75" font-size="11">${grid}${segments}${dots}${labels}</svg>`;
+  }else el('trend').textContent='No months have comparable paid and recorded hours.';
+  const activity=['Loading','Unloading'].map((label,i)=>({label,count:result.countsByDirection[i],day:result.totals[i*2+4],ot:result.totals[i*2+5]}));
+  const max=Math.max(1,...activity.map(item=>item.day+item.ot));
+  el('activity-hours').innerHTML=activity.map(({label,day,ot})=>`<div class="activity-row"><b>${label}</b><div class="track" title="Day ${hours(day)} · OT ${hours(ot)}"><i class="worked" style="width:${100*day/max}%"></i><i class="overtime" style="width:${100*ot/max}%"></i></div><strong>${day===null?'—':hours(day+ot)}</strong></div>`).join('');
+  el('variance').innerHTML=activity.map(({label})=>`<div class="variance"><span>${label}</span><b>—</b></div>`).join('');
+  el('activities').innerHTML=tableMarkup(['Activity','Operations','Standard h','Actual h','OT h','Efficiency'],[
+    ...activity.map(({label,count,day,ot})=>[label,fmt(count),'—',day===null?'—':fmt(day+ot),fmt(ot),'—']),
+    ['Total',fmt(operationsCount(result)),'—',fmt(actual(result)),fmt(result.totals[10]),'—']
+  ]);
+}
 async function refreshReport(){
   const version=++reportVersion;
   currentReport=null;
   el('download').disabled=true;
   el('status').textContent='Loading report…';
-  const month=el('month').value,customer=el('customer').value,job=el('job').value;
+  const month=el('month').value,customer=el('customer').value,job=el('job').value,role=el('role').value;
   el('report').classList.add('report-loading');
   try{
     if(!month||!customer)throw new Error('Select a month and customer.');
-    const selected=operations.filter(row=>row.customer===customer&&(!job||String(row.job)===job)&&row.start?.slice(0,7)===month);
-    const [payroll,crew]=await Promise.all([
-      rpc('gtl_monthly_payroll',{payroll_month:month,epfs:[]}),
-      selected.some(row=>row.crewPrivate)?rpc('gtl_private_movement_crews',{period:month}):[]
-    ]);
+    const months=Array.from({length:6},(_,i)=>{
+      const date=new Date(month+'-01T00:00:00Z');
+      date.setUTCMonth(date.getUTCMonth()+i-5);
+      return date.toISOString().slice(0,7);
+    });
+    const scoped=operations.filter(row=>row.customer===customer&&(!job||String(row.job)===job));
+    const loadMonth=async period=>{
+      const selected=scoped.filter(row=>row.start?.slice(0,7)===period);
+      const [payroll,crew]=await Promise.all([
+        selected.length?rpc('gtl_monthly_payroll',{payroll_month:period,epfs:[]}):null,
+        selected.some(row=>row.crewPrivate)?rpc('gtl_private_movement_crews',{period}):[]
+      ]);
+      const byOperation=new Map((crew??[]).map(row=>[String(row.id),row]));
+      const full=selected.map(row=>row.crewPrivate&&byOperation.has(String(row.id))
+        ?{...row,...byOperation.get(String(row.id)),crewPrivate:false}:row);
+      return calculateReport(full,new Map(payroll?.records??[]),Number(payroll?.hours),role);
+    };
+    const result=await loadMonth(month);
     if(version!==reportVersion)return;
-    const byOperation=new Map((crew??[]).map(row=>[String(row.id),row]));
-    const full=selected.map(row=>row.crewPrivate&&byOperation.has(String(row.id))
-      ?{...row,...byOperation.get(String(row.id)),crewPrivate:false}:row);
-    const result=calculateReport(full,new Map(payroll?.records??[]),Number(payroll?.hours));
-    currentReport={month,customer,job,...result};
+    const history=new Map(months.map(period=>[period,period===month?result:null]));
+    currentReport={month,customer,job,role,...result};
     renderReport(result);
-    if(!payroll?.hours)el('status').textContent='Monthly payroll or paid hours are unavailable. '+el('status').textContent;
+    renderOverview(history,result);
+    el('report').classList.remove('report-loading');
+    const comparisons=await Promise.allSettled(months.slice(0,-1).map(loadMonth));
+    if(version!==reportVersion)return;
+    comparisons.forEach((entry,i)=>{if(entry.status==='fulfilled')history.set(months[i],entry.value);});
+    renderOverview(history,result);
   }catch(error){
     if(version!==reportVersion)return;
-    for(const id of ['metrics','chart','body','foot'])el(id).replaceChildren();
+    for(const id of ['metrics','chart','body','foot','trend','comparison','activity-hours','variance','activities'])el(id).replaceChildren();
     el('status').textContent=error.message;
   }finally{
     if(version===reportVersion)el('report').classList.remove('report-loading');
@@ -183,7 +252,7 @@ async function openReport(){
 }
 el('head').innerHTML='<tr>'+columns.map(label=>`<th scope="col">${esc(label)}</th>`).join('')+'</tr>';
 el('customer').addEventListener('change',()=>{populateJobs();void refreshReport();});
-for(const id of ['month','job'])el(id).addEventListener('change',refreshReport);
+for(const id of ['month','job','role'])el(id).addEventListener('change',refreshReport);
 el('download').addEventListener('click',async()=>{
   const snapshot=currentReport;
   if(!snapshot)return;
@@ -191,7 +260,7 @@ el('download').addEventListener('click',async()=>{
   try{
     const {data}=await payrollClient.auth.getUser();
     if(!isAdmin(data?.user))throw new Error('Payroll administrator sign-in required.');
-    const sheet=[['Labour Productivity Report'],['Month',snapshot.month],['Customer',snapshot.customer],['Job',snapshot.job||'All Jobs'],[],columns,
+    const sheet=[['Labour Productivity Report'],['Month',snapshot.month],['Customer',snapshot.customer],['Job',snapshot.job||'All Jobs'],['Designation',snapshot.role||'All designations'],[],columns,
       ...snapshot.rows.map(row=>row.values),snapshot.totals];
     const notes=[['Metric','Definition'],['Idle / unallocated','Monthly paid hours less recorded day hours, minimum zero. Filtered views omit hours outside the selection.'],
       ['Total cost','Sum of known day and overtime costs. Blank cells indicate unavailable rates or hours.'],

@@ -67,6 +67,26 @@ footer{display:flex;justify-content:flex-end;margin-top:12px}
   .filters{grid-template-columns:repeat(2,minmax(0,1fr))}
   .filters label:last-child{grid-column:1/-1}
 }
+
+.report-band{display:flex;align-items:center;justify-content:space-between;gap:12px;background:#102943;color:white;padding:12px 16px;border-radius:8px;margin:14px 0 10px;border-left:4px solid #66aacf}
+.report-band h2{color:inherit;margin:0;font-size:1.05rem}
+.report-band time{background:#203c58;border:1px solid #41607a;border-radius:5px;padding:4px 8px;font-size:.83rem;white-space:nowrap}
+.filters{grid-template-columns:repeat(4,minmax(0,1fr));margin-bottom:8px}
+.report-grid{display:grid;grid-template-columns:minmax(0,1.65fr) minmax(0,1fr);gap:10px}
+.report-grid section{margin-bottom:0}
+#activity-performance{margin-top:10px}
+.report-pair th,.report-pair td{padding:7px 8px;white-space:normal}
+.report-pair th:nth-child(2),.report-pair td:nth-child(2){text-align:right}
+.report-pair thead{position:static}
+#trend .plot{display:block;width:100%;min-height:130px;max-height:210px}
+.legend{display:flex;gap:13px;flex-wrap:wrap;color:#52647b;margin-bottom:8px}
+.legend b{color:#245eb2}.legend .ot{color:#a45d18}
+.activity-row{display:grid;grid-template-columns:88px minmax(0,1fr) 70px;gap:8px;align-items:center;margin:10px 0}
+.activity-row strong{text-align:right}.activity-row .worked{background:#245eb2}.activity-row .overtime{background:#ecaa54}
+.variance{display:flex;justify-content:space-between;border-bottom:1px solid #e0e8f1;padding:7px 0}
+.variance b{background:#edf3fa;border-radius:3px;padding:1px 8px}
+.metrics small{display:block;margin-top:3px}.metrics>div:last-child small{color:#cbdbe8}
+@media(max-width:720px){.report-grid{grid-template-columns:1fr}.filters{grid-template-columns:repeat(2,minmax(0,1fr))}.filters label:last-child{grid-column:auto}}
 </style>
 </head>
 <body>
@@ -81,8 +101,20 @@ footer{display:flex;justify-content:flex-end;margin-top:12px}
 <label>Month<input id="month" type="month" value="2026-10"></label>
 <label>Customer<select id="customer"></select></label>
 <label>Job<select id="job"></select></label>
+<label>Designation<select id="role"><option value="">All designations</option><option>Supervisor</option><option>Tally Clerk</option><option>Operator</option></select></label>
 </section>
+<div class="report-band"><h2>Labour Productivity Overview</h2><time data-report-month></time></div>
 <section id="metrics" class="metrics" aria-label="Report totals"></section>
+<div class="report-grid">
+<section><h2>Monthly Labour Utilisation Trend</h2><p class="report-note"><small>Recorded day hours ÷ paid day hours for assigned employees with known hours.</small></p><div id="trend"></div></section>
+<section><h2>Month-on-Month Comparison</h2><div class="scroll"><table class="report-pair" id="comparison"></table></div></section>
+</div>
+<div class="report-band"><h2>Monthly Labour by Activity</h2><time data-report-month></time></div>
+<div class="report-grid">
+<section><h2>Hours by Activity</h2><div class="legend"><span><b>■</b> Regular hours</span><span><b class="ot">■</b> Overtime</span></div><div id="activity-hours"></div></section>
+<section><h2>Hours vs Standard</h2><div id="variance"></div><p class="report-note"><small>Activity targets are required to calculate the difference between recorded and standard hours.</small></p></section>
+</div>
+<section id="activity-performance"><h2>Activity Performance</h2><div class="scroll"><table class="report-pair" id="activities"></table></div><p class="report-note"><small>Operations count each vehicle event once. The data source tracks loading and unloading.</small></p></section>
 <section><h2>Employee detail</h2><p class="report-note"><small>Idle hours = monthly paid hours less recorded loading and unloading day hours, minimum zero. OT is separate. Filtered views show time outside that selection as unallocated. Counts are vehicle operations per employee. Costs use the selected month's payroll and recorded operations. Overlapping assignments are counted as logged.</small></p>
 <div class="scroll" tabindex="0" aria-label="Employee detail table"><table><thead id="head"></thead><tbody id="body"></tbody><tfoot id="foot"></tfoot></table></div>
 <footer><button id="download" type="button" disabled>Download Excel</button></footer>
@@ -92,6 +124,6 @@ footer{display:flex;justify-content:flex-end;margin-top:12px}
 </main>
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
 <script src="./jszip.min.js"></script>
-<script src="./labour-report.js"></script>
+<script src="./labour-report.js?v=monthly-overview"></script>
 </body>
 </html>
