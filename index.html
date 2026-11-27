@@ -987,7 +987,7 @@ html.guest-dashboard :is(#openCosts,.costing-report-links,#monthlyCosts,#combine
 .monthly-cost-card strong{font-size:clamp(1.02rem,1.65vw,1.4rem)}
 .monthly-cost-total{background:#142844;border-color:#142844;border-top-color:var(--cost-accent);color:#fff}
 .monthly-cost-card:has([aria-expanded="true"]){outline:2px solid #4c8da6;outline-offset:2px}
-.management-cost-link{display:inline-flex;align-items:center;gap:7px;font:inherit;font-size:.83rem;color:inherit;margin-top:auto;padding:2px 0;border:0;background:transparent;cursor:pointer;text-align:left}
+.management-cost-link{display:inline-flex;align-items:center;gap:7px;width:auto;max-width:calc(100% - 24px);min-width:0;overflow-wrap:anywhere;font:inherit;font-size:.83rem;color:inherit;margin-top:auto;padding:2px 0;border:0;background:transparent;cursor:pointer;text-align:left}
 .management-cost-link::after{content:'→'}
 .management-cost-link[aria-expanded="true"]::after{content:'↑'}
 .management-cost-link:hover{text-decoration:underline;text-underline-offset:2px}
@@ -997,6 +997,17 @@ html.guest-dashboard :is(#openCosts,.costing-report-links,#monthlyCosts,#combine
 .monthly-cost-breakdown h3{font-size:.9rem;margin:0}
 .monthly-cost-breakdown dl{display:flex;flex-wrap:wrap;flex:1;gap:5px 16px;margin:0;font-size:.83rem}
 .monthly-cost-breakdown dl div{display:flex;gap:6px}
+.monthly-cost-mix{--labour-mix:#7861a9;--area-mix:#3c8a77;--other-mix:var(--shift-ot);align-self:stretch;margin:2px 12px 0;font-size:.72rem;color:#edf4fc}
+.monthly-cost-mix-track{display:flex;gap:2px;overflow:hidden;height:8px;margin-bottom:5px;border-radius:4px;background:#142844}
+.monthly-cost-mix-track span{flex:var(--cost-share) 1 0}
+.monthly-cost-mix-labour{--mix-color:var(--labour-mix)}
+.monthly-cost-mix-area{--mix-color:var(--area-mix)}
+.monthly-cost-mix-other{--mix-color:var(--other-mix)}
+.monthly-cost-mix-track span,.monthly-cost-mix-legend li::before{background:var(--mix-color)}
+.monthly-cost-mix-legend{display:flex;flex-wrap:wrap;gap:3px 9px;list-style:none;margin:0;padding:0}
+.monthly-cost-mix-legend li{display:flex;align-items:center;gap:4px;white-space:nowrap}
+.monthly-cost-mix-legend li::before{content:'';width:6px;height:6px;border-radius:2px}
+.monthly-cost-mix-legend b{font-variant-numeric:tabular-nums}
 .monthly-cost-breakdown dd{margin:0;font-weight:700;font-variant-numeric:tabular-nums}
 .monthly-breakdown-records{flex-basis:100%;min-width:0;border-top:1px solid #c9dce9;padding-top:8px}
 .monthly-breakdown-records h4{margin:8px 0 5px;font-size:.85rem}
@@ -1011,7 +1022,7 @@ html.guest-dashboard :is(#openCosts,.costing-report-links,#monthlyCosts,#combine
 @keyframes monthly-breakdown-in{from{opacity:0;transform:translateY(-5px)}to{opacity:1;transform:translateY(0)}}
 @media(max-width:680px){.monthly-cost-card{min-height:105px;padding:10px}.monthly-cost-breakdown dl{flex-basis:100%}}
 .monthly-cost-grid > .monthly-cost-card{
-  align-self:start;min-height:0;gap:4px;padding:0 0 7px;
+  min-height:0;gap:4px;padding:0 0 7px;
 }
 .monthly-cost-grid > .monthly-cost-card h3{
   align-self:stretch;padding:4px 12px 6px;background:var(--cost-accent);
@@ -1790,27 +1801,42 @@ function renderMonthlyCosts(visit){
     monthlyCostKey=undefined;
     return;
   }
-  const {month,figures,sharedCharges}=monthlyCostReport();
+  const {month,figures,sharedCharges,loading,unloading}=monthlyCostReport();
   const scope=JSON.stringify([el('customer').value,el('job').value,month]);
   const key=JSON.stringify([scope,figures,sharedCharges]);
   section.hidden=false;
   if(key===monthlyCostKey)return;
   monthlyCostKey=key;
   const period=new Intl.DateTimeFormat('en-LK',{month:'long',year:'numeric',timeZone:'UTC'}).format(new Date(month+'-01T00:00:00Z'));
+  const categories=[
+    ['labour','Labour',loading.labour+unloading.labour],
+    ['area','Area',loading.areaCost+unloading.areaCost],
+    ['other','Other',loading.operatingCost+unloading.operatingCost+(figures.find(([kind])=>kind==='total')?.[4]??0)]
+  ];
+  const costSum=categories.reduce((sum,[,,amount])=>sum+amount,0);
+  const mix=costSum>0&&categories.every(([,,amount])=>Number.isFinite(amount)&&amount>=0);
+  const costMix=`<div class="monthly-cost-mix">
+    ${mix?`<div class="monthly-cost-mix-track" aria-hidden="true">
+      ${categories.filter(([,,amount])=>amount>0).map(([kind,,amount])=>`<span class="monthly-cost-mix-${kind}" style="--cost-share:${amount/costSum}"></span>`).join('')}
+    </div>
+    <ul class="monthly-cost-mix-legend" aria-label="Share of total monthly cost">
+      ${categories.map(([kind,name,amount])=>`<li class="monthly-cost-mix-${kind}">${name} <b>${(amount/costSum*100).toFixed(1)}%</b></li>`).join('')}
+    </ul>`:'<span>Labour + Area + Other</span>'}
+  </div>`;
   section.innerHTML=`<div class="monthly-cost-heading"><h2 id="monthlyCostsHeading">Monthly Cost Summary · ${period}</h2></div>
     <div class="monthly-cost-grid">${figures.map(([kind,label,l,u,both=0])=>`
       <article class="monthly-cost-card monthly-cost-${kind}">
         <h3>${label}</h3>
         <strong data-monthly-amount="${l+u+both}">${money(l+u+both)}</strong>
-        <button type="button" class="management-cost-link" data-monthly-breakdown="${kind}" aria-expanded="false" aria-controls="cost-breakdown-${kind}">View breakdown</button>
+        ${kind==='total'?costMix:`<button type="button" class="management-cost-link" data-monthly-breakdown="${kind}" aria-expanded="false" aria-controls="cost-breakdown-${kind}">View breakdown</button>`}
       </article>`).join('')}</div>
-    <div class="monthly-cost-breakdowns">${figures.map(([kind,label,l,u,both=0])=>`
-      <section class="monthly-cost-breakdown" id="cost-breakdown-${kind}" aria-labelledby="cost-breakdown-title-${kind}" hidden>
+    <div class="monthly-cost-breakdowns">${figures.filter(([kind])=>kind!=='total').map(([kind,label,l,u,both=0])=>`
+      <section class="monthly-cost-breakdown monthly-breakdown-${kind}" id="cost-breakdown-${kind}" aria-labelledby="cost-breakdown-title-${kind}" hidden>
         <h3 id="cost-breakdown-title-${kind}">${label}</h3>
-        <dl><div><dt>Loading</dt><dd>${money(l)}</dd></div>
-            <div><dt>Unloading</dt><dd>${money(u)}</dd></div>
-            ${both!==0? `<div><dt>Both (U/L)</dt><dd>${money(both)}</dd></div>` : ''}</dl>
-        ${kind==='labour'?'':'<div class="monthly-breakdown-records"></div>'}
+        ${kind==='labour'?'':`<dl><div><dt>Loading</dt><dd>${money(l)}</dd></div>
+          <div><dt>Unloading</dt><dd>${money(u)}</dd></div>
+          ${both!==0?`<div><dt>Both (U/L)</dt><dd>${money(both)}</dd></div>`:''}</dl>`}
+        <div class="monthly-breakdown-records"></div>
       </section>`).join('')}</div>`;
   if(matchMedia('(prefers-reduced-motion: reduce)').matches)return;
   const amounts=[...section.querySelectorAll('[data-monthly-amount]')];

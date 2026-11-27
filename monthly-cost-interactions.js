@@ -8,30 +8,22 @@
   function costRecords(kind) {
     const report = monthlyCostReport();
     let body = '';
-    if (kind === 'total') {
-      body += '<h4>Published labour by vehicle visit</h4>' + table(['Dept Reg No.', 'Vehicle', 'Operation', 'Crew role', 'Regular hours', 'OT hours', 'Cost', 'Status'],
-        report.rows.flatMap(row => {
-          const publication = operationPublication(row);
-          const visit = [row.reg, row.vehicle, operationName(row.direction)];
-          const status = publication ? (publication.complete ? 'Complete' : 'Partial') : 'Not published';
-          return [
-            [...visit, 'Visit total', '—', '—', publication ? money(publication.amount) : '—', status],
-            ...(publication?.roles ?? []).map(role => [
-              ...visit, role.role, number(role.dayMinutes == null ? null : role.dayMinutes / 60),
-              number(role.otMinutes == null ? null : role.otMinutes / 60),
-              role.totalCost == null ? '—' : money(role.totalCost), '—'
-            ])
-          ];
+    if (kind === 'labour') {
+      body += table(['Operation', 'Vehicle visits', 'Visits with published cost', 'Labour cost'],
+        [['Unloading', 'U', report.unloading], ['Loading', 'L', report.loading]].map(([label, direction, cost]) => {
+          const visits = report.rows.filter(row => row.direction === direction);
+          const published = visits.map(operationPublication).filter(Boolean).length;
+          return [label, visits.length, published, money(cost.labour)];
         }));
     }
-    if (kind === 'area' || kind === 'total') {
+    if (kind === 'area') {
       body += '<h4>Monthly area</h4>' + table(['Operation', 'Area (sq ft)', 'Rate', 'Cost', 'Status'],
         [['Loading', report.loading], ['Unloading', report.unloading]].map(([label, cost]) =>
           [label, number(cost.sqft), cost.rate == null ? '—' : money(cost.rate),
             cost.sqft == null || (cost.rate == null && cost.areaCost === 0) ? '—' : money(cost.areaCost),
             cost.sqft == null ? 'Area unavailable for this scope' : cost.rate == null ? 'Check job rates' : 'Available']));
     }
-    if (kind === 'other' || kind === 'total') {
+    if (kind === 'other') {
       body += '<h4>Operating charges</h4>' + table(['Category', 'Item', 'Job', 'Operation', 'Date', 'Quantity', 'Rate', 'Cost'],
         report.charges.map(({ job, label, entry, direction, amount }) => [
           label, entry.item || '—', jobCostScopeLabel(job), direction === 'UL' ? 'Both (U/L)' : operationName(direction),
