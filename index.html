@@ -965,6 +965,21 @@ html.guest-dashboard :is(#openCosts,.costing-report-links,#monthlyCosts,#combine
 #jobCharges .cost-item-menu{position:absolute;z-index:5;inset-inline:0;top:calc(100% + 3px);max-height:180px;overflow:auto;padding:4px;background:#fff;border:1px solid #a6b9ca;border-radius:6px;box-shadow:0 4px 12px #102a4326}
 #costSettings #jobCharges .cost-item-menu button{display:block;width:100%;margin:0;padding:5px 8px;text-align:left;color:#173e60;background:#fff;border:0;box-shadow:none}
 #costSettings #jobCharges .cost-item-menu button:is(:hover,:focus-visible){background:#e8f2f8}
+/* Dashboard filter menus */
+.dashboard-header select option{background:#f5f9fd;color:#142844}
+.dashboard-header select option:checked{background:#dceaff;color:#142844}
+@supports (appearance:base-select) and selector(::picker(select)){
+  .dashboard-header select,.dashboard-header select::picker(select){appearance:base-select}
+  .dashboard-header select::picker(select){
+    margin-block:4px;padding:4px;border:1px solid #93b0ca;border-radius:9px;
+    background:#f5f9fd;color:#142844;box-shadow:0 8px 22px #14284430;
+    max-block-size:min(22rem,60vh);overflow:auto;
+  }
+  .dashboard-header select option{padding:8px 11px;border-radius:5px}
+  .dashboard-header select option:checked{font-weight:700}
+  .dashboard-header select option:is(:hover,:focus-visible){background:#183956;color:#fff}
+  .dashboard-header select option:focus-visible{outline:2px solid #64c6db;outline-offset:-2px}
+}
 .management-cost-link:focus-visible{outline:3px solid #287eae;outline-offset:2px}
 .monthly-cost-grid{align-items:stretch}
 .monthly-cost-card{--cost-accent:#142844;display:flex;flex-direction:column;align-items:flex-start;gap:6px;min-height:116px;padding:12px 14px;border:1px solid #b5cadd;border-top:4px solid var(--cost-accent);border-radius:12px;background:#fff}
