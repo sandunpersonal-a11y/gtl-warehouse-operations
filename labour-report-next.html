@@ -148,12 +148,12 @@ main select option:checked{background:#dceaff;color:#142844}
 </section>
 <section class="panel" id="importPanel">
   <h2>Import Labour Working Summary</h2>
-  <p class="muted">Select the month before importing. Only operations that start in that month are included.</p>
-  <form class="controls" id="importForm"><label>Upload month<input id="uploadMonth" type="month" required></label><label>Excel workbook<input id="workbook" type="file" accept=".xlsx" required></label><button id="importButton" class="primary">Preview import</button></form>
+  <p class="muted">Select the month before importing. Payroll admins save matching operations to the shared report. Replacing a saved month requires confirmation.</p>
+  <form class="controls" id="importForm"><label>Upload month<input id="uploadMonth" type="month" required></label><label>Excel workbook<input id="workbook" type="file" accept=".xlsx" required></label><button id="importButton" class="primary">Upload workbook</button></form>
   <p id="importStatus" role="status"></p>
   <p id="lastUpload" class="muted">No shared upload for this month.</p>
   <details id="issues" hidden><summary>Import issues</summary><ul id="issueList"></ul></details>
-  <button id="saveMonth" type="button" hidden>Save month to Supabase</button>
+  <button id="saveMonth" type="button" hidden>Retry shared save</button>
 </section>
 </main>
 <dialog id="operation" aria-labelledby="operationTitle"><form method="dialog"><button>Close</button></form><h2 id="operationTitle"></h2><dl id="detail"></dl></dialog>
@@ -186,6 +186,6 @@ main select option:checked{background:#dceaff;color:#142844}
 <script src="./labour-import.js"></script>
 <script src="./labour-shared.js"></script>
 <script src="./labour-efficiency.js"></script>
-<script src="./labour-register.js"></script>
+<script src="./labour-register.js?v=shared-upload"></script>
 </body>
 </html>

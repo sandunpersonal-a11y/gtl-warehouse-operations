@@ -277,7 +277,7 @@
     render();
   }
 
-  async function openMonth() {
+  async function openMonth(useLatest = false) {
     const month = el('month').value;
     if (!month) return;
     const version = ++loadVersion;
@@ -286,8 +286,9 @@
     el('sharedStatus').textContent = 'Loading '+month+'…';
     showMonth(month,local?.operations??[],local?.rates??new Map());
     try {
-      role = await labourRole();
+      const activeRole = await labourRole();
       if (version!==loadVersion) return;
+      role = activeRole;
       el('saveMonth').hidden = !pending || role!=='payroll_admin';
       if (!role) {
         el('sharedStatus').textContent = local?'Local import preview. Sign in on the dashboard to access shared records.':'Sign in on the dashboard to access shared records, or preview a workbook below.';
@@ -295,6 +296,16 @@
       }
       const shared = await loadLabourMonth(month);
       if (version!==loadVersion) return;
+      if (useLatest && !local && !shared.upload) {
+        const latest = await labourClient.from('gtl_labour_months').select('month').order('month',{ascending:false}).limit(1).maybeSingle();
+        if (latest.error) throw latest.error;
+        if (version!==loadVersion) return;
+        if (latest.data?.month && latest.data.month!==month) {
+          el('month').value = latest.data.month;
+          await openMonth();
+          return;
+        }
+      }
       const monthlyRates = new Map(shared.rates.map(row=>[keys({agent:row.agent,vehicleType:row.vehicle_type,direction:row.direction}),Number(row.amount)]));
       if (local) local.rates = monthlyRates;
       showMonth(month,local?.operations??shared.upload?.operations??[],monthlyRates);
@@ -329,6 +340,10 @@
       localMonths.set(month,{operations:rows,rates:new Map()});
       el('month').value = month;
       await openMonth();
+      if (pending?.month===month) {
+        if (role==='payroll_admin') await savePendingMonth();
+        else el('importStatus').textContent += ' · Preview only. Sign in as payroll admin to save.';
+      }
     } catch (error) {
       el('importStatus').textContent = 'Import failed: '+error.message;
     } finally {
@@ -336,15 +351,18 @@
     }
   });
 
-  el('saveMonth').addEventListener('click',async () => {
-    if (role!=='payroll_admin' || !pending) return;
+  async function savePendingMonth() {
+    if (role!=='payroll_admin' || !pending || el('saveMonth').disabled) return;
     const snapshot = pending;
     el('saveMonth').disabled = true;
     try {
       const table = labourClient.from('gtl_labour_months');
       const existing = await table.select('updated_at').eq('month',snapshot.month).maybeSingle();
       if (existing.error) throw existing.error;
-      if (existing.data && !confirm('Replace all shared operations for '+snapshot.month+' with this import?')) return;
+      if (existing.data && !confirm('Replace all shared operations for '+snapshot.month+' with this import?')) {
+        el('importStatus').textContent += ' · Preview only. The previous shared upload is still saved.';
+        return;
+      }
       const values = {...snapshot,updated_at:new Date().toISOString()};
       const query = existing.data
         ? table.update(values).eq('month',snapshot.month).eq('updated_at',existing.data.updated_at)
@@ -362,7 +380,8 @@
     } finally {
       el('saveMonth').disabled = false;
     }
-  });
+  }
+  el('saveMonth').addEventListener('click',savePendingMonth);
 
   el('rateForm').addEventListener('submit',async event => {
     event.preventDefault();
@@ -532,11 +551,11 @@
   speech?.addEventListener('voiceschanged',refreshSpeechControl);
 
   for (const id of ['rateAgent','rateVehicle','rateDirection']) el(id).addEventListener('change',refreshRateFields);
-  el('month').addEventListener('change',openMonth);
-  el('loadMonth').addEventListener('click',openMonth);
+  el('month').addEventListener('change',()=>void openMonth());
+  el('loadMonth').addEventListener('click',()=>void openMonth());
   const date = new Intl.DateTimeFormat('en-CA',{timeZone:'Asia/Colombo',year:'numeric',month:'2-digit'}).formatToParts();
   el('month').value = el('uploadMonth').value = ['year','month'].map(type=>date.find(part=>part.type===type).value).join('-');
-  void openMonth();
+  void openMonth(true);
   for (const id of ['query','account','customerFilter','direction','source']) {
     el(id).addEventListener(id === 'query' ? 'input' : 'change',() => {
       if (id==='account') refreshCustomers();
