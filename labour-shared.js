@@ -14,7 +14,8 @@ async function labourRole() {
   if (!labourClient) return '';
   const { data:{session} } = await labourClient.auth.getSession();
   if (!session) return '';
-  const { data, error } = await labourClient.rpc('gtl_dashboard_role');
+  let { data, error } = await labourClient.rpc('gtl_labour_report_role');
+  if (error?.code === 'PGRST202') ({ data, error } = await labourClient.rpc('gtl_dashboard_role'));
   if (error) throw error;
   return ['management','payroll_admin'].includes(data) ? data : '';
 }
