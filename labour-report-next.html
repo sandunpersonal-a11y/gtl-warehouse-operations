@@ -1,0 +1,191 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Labour Operations | GTL</title>
+<link rel="icon" href="./icon-192.png">
+<style>
+:root{font:15px/1.5 Calibri,"Segoe UI",system-ui,sans-serif;color:#142844;background:#edf3f8}*{box-sizing:border-box}body{margin:0}
+header{background:#142844;color:#fff;border-bottom:4px solid #24b4a4}header div,main{width:100%;min-width:0;margin:0}
+header div{padding:18px clamp(12px,2vw,26px)}
+main{padding-block:14px;padding-inline:clamp(8px,2vw,32px)}
+header div{display:flex;align-items:center;justify-content:space-between;gap:12px}header a{color:#fff}h1,h2,p{margin:0}h1{font-size:1.55rem}h2{font-size:1.14rem}
+[hidden]{display:none!important}main{display:grid;grid-template-columns:minmax(0,1fr);gap:14px}.panel,.metric{background:#fff;border:1px solid #cfdeeb;border-radius:10px;padding:14px}
+.metrics{display:grid;grid-template-columns:repeat(auto-fit,minmax(120px,1fr));gap:8px}.metric strong{display:block;font-size:1.45rem;font-variant-numeric:tabular-nums}
+.controls>*{min-width:0;max-width:100%}.controls input{min-width:0}.controls{display:flex;align-items:end;flex-wrap:wrap;gap:10px;margin:10px 0}label{display:grid;gap:3px;font-weight:700}
+input,select,button{font:inherit;color:inherit;padding:6px 9px;border:1px solid #a6bbcf;border-radius:6px;background:#fff;max-width:100%}
+:focus-visible{outline:3px solid #218482;outline-offset:2px}button{cursor:pointer}button:disabled{cursor:default;opacity:.55}.primary{background:#142844;color:#fff}.muted{color:#52677b}
+.scroll{max-width:100%;overflow:auto;margin-top:10px}table{border-collapse:collapse;width:100%;white-space:nowrap}td,th{padding:7px 9px;border-bottom:1px solid #dde8f2;text-align:left}th{background:#edf4f9}tr:nth-child(even) td{background:#f7fafd}
+dialog{width:min(510px,calc(100vw - 26px));max-height:88vh;overflow:auto;border:1px solid #a6bbcf;border-radius:12px;color:#142844}dialog::backdrop{background:#101f35a0}
+dialog form{float:right}dl{display:grid;grid-template-columns:auto 1fr;gap:7px 13px}dd{margin:0;overflow-wrap:anywhere}
+@media(prefers-reduced-motion:no-preference){dialog[open]{animation:reveal .2s ease-out both}@keyframes reveal{from{opacity:0;transform:translateY(8px)}to{opacity:1;transform:none}}}
+.metrics{grid-template-columns:repeat(auto-fit,minmax(145px,1fr))}.metric{border-top:3px solid #188c88}.metric span{display:block;margin-top:4px;color:#52677b;font-size:.84rem}
+.direction-reports{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:10px}
+@media(max-width:720px){.direction-reports{grid-template-columns:minmax(0,1fr)}}
+.direction-report{--direction:#317aa6;min-width:0;padding:0;overflow:hidden}
+.unloading-report{--direction:#208879}
+.direction-heading{display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:4px 12px;background:#142844;color:#fff;padding:6px 12px;border-inline-start:4px solid var(--direction)}
+.direction-heading h2{font-size:1rem;line-height:1.25}
+.direction-heading p{display:flex;flex-wrap:wrap;align-items:center;gap:4px 8px;font-size:.78rem;color:#e0edf8;font-variant-numeric:tabular-nums}
+.direction-heading p strong{color:#fff}
+.direction-heading p span{white-space:nowrap}
+.direction-heading p span:first-of-type{background:#28445e;border-radius:4px;padding:1px 5px;color:#fff}
+.direction-body{padding:9px 12px 12px}
+.direction-report h3{font-size:.88rem;margin:0 0 6px}
+.direction-chart-heading,.direction-chart-row{display:grid;grid-template-columns:7.25rem 5.75rem minmax(0,1fr);align-items:center;gap:8px;padding-inline:8px}
+.direction-chart-heading{font-size:.72rem;font-weight:700;color:#52677b;padding-block:4px}
+.direction-chart-heading span:nth-child(2){text-align:center;white-space:nowrap}
+.direction-chart-row{margin:4px 0;padding-block:4px;border-radius:5px;background:#f5f8fb}
+.direction-chart-row>span{font-size:.82rem;font-weight:700;white-space:nowrap}
+.direction-vehicle-count{justify-self:center;min-width:3ch;text-align:center;padding:0 5px;border-radius:4px;background:#e0ebf7;color:#193e5d;font-variant-numeric:tabular-nums}
+.hour-track{display:grid;grid-template-columns:minmax(0,1fr) 6rem;align-items:center;min-width:0;gap:6px}
+.hour-track-meter{min-width:0;height:10px}
+.hour-fill{display:block;height:100%;width:calc(100% * var(--share));border-radius:4px;transform-origin:left;background:var(--vehicle-color,var(--direction))}
+.direction-chart-row .direction-average-time{display:grid;grid-template-columns:3ch minmax(0,1fr);align-items:center;gap:3px;color:#142844;font-size:.8rem;font-variant-numeric:tabular-nums;white-space:nowrap}
+.direction-average-time span:first-child{font-size:.68rem;color:#52677b}
+.direction-average-time span:last-child{text-align:right}
+@media(prefers-reduced-motion:no-preference){.hour-fill{animation:grow .42s ease-out both}@keyframes grow{from{transform:scaleX(0)}to{transform:scaleX(1)}}}
+.section-head{display:flex;flex-wrap:wrap;justify-content:space-between;align-items:center;gap:12px}.section-head form,#photoForm{float:none}
+.efficiency{width:min(1120px,calc(100vw - 28px))}.employee{text-align:center}.employee dl{text-align:left;text-align:start}
+.portrait-ring{margin:16px auto 5px;width:112px;aspect-ratio:1;padding:6px;border-radius:50%;display:grid;place-items:center;position:relative;isolation:isolate;background:#142844;color:#fff}
+.portrait-ring::before{content:'';position:absolute;inset:0;z-index:-1;border-radius:inherit;background:conic-gradient(#24b4a4,#afdcd8,#4085c9,#24b4a4)}
+.portrait-ring img,.portrait-ring span{border-radius:50%;width:100%;height:100%;object-fit:cover;display:grid;place-items:center;background:#142844;font-size:1.4rem}
+.employee h3{margin:4px 0}
+@media(prefers-reduced-motion:no-preference){.employee[open] .portrait-ring::before{animation:portrait-ring .9s ease-out both}@keyframes portrait-ring{from{transform:rotate(-210deg);opacity:.2}to{transform:rotate(0);opacity:1}}}
+.department-scope{display:flex;align-items:end;gap:10px;flex:1 1 345px;min-width:0;max-width:100%}
+.department-scope>label:first-child{flex:0 1 165px;min-width:0}
+.customer-context{display:grid;gap:3px;min-width:0;flex:1}
+.customer-context select{width:100%;min-width:0;min-height:35px}
+.department-summary{border-inline-start:4px solid #188c88}
+.department-summary p{margin-top:6px}
+#departmentReport{width:min(640px,calc(100vw - 26px))}
+.department-narrative{display:grid;gap:10px;margin:14px 0}
+#departmentVoiceStatus{margin-top:6px}
+@media(max-width:420px){.panel{padding:11px}.direction-report{padding:0}.direction-body{padding:10px}.department-scope{align-items:start;flex-wrap:wrap}.customer-context{flex-basis:100%}.direction-chart-heading,.direction-chart-row{gap:4px;padding-inline:4px;grid-template-columns:6.5rem 4.4rem minmax(0,1fr)}.direction-chart-row>span{font-size:.75rem}.hour-track{grid-template-columns:minmax(0,1fr) 5rem;gap:3px}.direction-chart-row .direction-average-time{font-size:.72rem}}
+/* Match the main dashboard dropdowns. */
+main select option{background:#f5f9fd;color:#142844}
+main select option:checked{background:#dceaff;color:#142844}
+@supports (appearance:base-select) and selector(::picker(select)){
+  main select,main select::picker(select){appearance:base-select}
+  main select::picker(select){
+    margin-block:4px;padding:4px;border:1px solid #93b0ca;border-radius:9px;
+    background:#f5f9fd;color:#142844;box-shadow:0 8px 22px #14284430;
+    max-block-size:min(22rem,60vh);overflow:auto;
+  }
+  main select option{padding:8px 11px;border-radius:5px}
+  main select option:checked{font-weight:700}
+  main select option:is(:hover,:focus-visible){background:#183956;color:#fff}
+  main select option:focus-visible{outline:2px solid #64c6db;outline-offset:-2px}
+}
+</style>
+</head>
+<body>
+<header><div><h1>Labour Operations</h1><a href="./index.html">← Dashboard</a></div></header>
+<main>
+<section class="panel">
+  <div class="section-head"><h2>Labour performance</h2><button id="openEfficiency" class="primary" type="button" disabled>Labour Efficiency →</button></div>
+  <div class="controls"><label>Report month<input id="month" type="month"></label><button id="loadMonth" type="button">Load shared month</button></div>
+  <div class="controls" id="reportFilters" hidden>
+    <label>Search operations<input id="query" type="search" placeholder="Tally, EPF, vehicle or reference"></label>
+    <div class="department-scope">
+      <label>Department<select id="account"><option value="">All departments</option></select></label>
+      <label class="customer-context">Customer<select id="customerFilter" disabled><option value="">Select a department</option></select></label>
+    </div>
+    <label>Direction<select id="direction"><option value="">Both</option><option value="loading">Loading</option><option value="unloading">Unloading</option></select></label>
+    <label>Crew source<select id="source"><option value="">All sources</option><option value="agency">Agency on record</option><option value="internal">No agency listed</option></select></label>
+  </div>
+  <p id="sharedStatus" class="muted" role="status"></p>
+</section>
+<div class="metrics" id="metrics" hidden aria-label="Imported operations"></div>
+<section class="panel department-summary" id="departmentSummary" hidden aria-labelledby="departmentSummaryHeading">
+  <div class="section-head"><h2 id="departmentSummaryHeading">Department summary</h2><button type="button" id="openDepartmentReport">Open report →</button></div>
+  <p id="departmentBrief" aria-live="polite"></p>
+</section>
+<div class="direction-reports" id="workload" hidden>
+  <section class="panel direction-report unloading-report" aria-labelledby="unloadingReportTitle">
+    <div class="direction-heading"><h2 id="unloadingReportTitle">Unloading Report</h2><p id="unloadingSummary"></p></div>
+    <div class="direction-body">
+    <div class="direction-chart-heading"><span>Vehicle Type</span><span>Vehicle Count</span></div><div id="unloadingChart"></div>
+    </div>
+  </section>
+  <section class="panel direction-report loading-report" aria-labelledby="loadingReportTitle">
+    <div class="direction-heading"><h2 id="loadingReportTitle">Loading Report</h2><p id="loadingSummary"></p></div>
+    <div class="direction-body">
+    <div class="direction-chart-heading"><span>Vehicle Type</span><span>Vehicle Count</span></div><div id="loadingChart"></div>
+    </div>
+  </section>
+</div>
+<section class="panel" id="crewActivity" hidden>
+  <div class="section-head"><h2>Crew activity</h2>
+    <label>Role<select id="crewActivityRole"><option value="">All roles</option><option value="supervisors">Supervisor</option><option value="clerks">Tally Clerk</option><option value="operators">Operator</option></select></label>
+  </div>
+  <div class="scroll" tabindex="0" aria-label="Crew activity table"><table><thead><tr>
+    <th scope="col">EPF</th><th scope="col">Role</th><th scope="col">Loading hours</th><th scope="col">Unloading hours</th>
+    <th scope="col">Loading vehicles by type</th><th scope="col">Unloading vehicles by type</th>
+  </tr></thead><tbody id="crewActivityRows"></tbody></table></div>
+</section>
+<section class="panel" id="register" hidden>
+  <h2>Tally Register</h2>
+  <p id="matchCount" class="muted" aria-live="polite"></p>
+  <div class="scroll" tabindex="0" aria-label="Operations table"><table>
+    <thead><tr><th scope="col">Tally #</th><th scope="col">Department</th><th scope="col">Customer</th><th scope="col">Operation</th><th scope="col">Vehicle type</th><th scope="col">Agency</th><th scope="col">Start</th></tr></thead>
+    <tbody id="rows"></tbody>
+  </table></div>
+  <div class="controls"><button id="previous" type="button">Previous</button><button id="next" type="button">Next</button></div>
+</section>
+<section class="panel" id="ratePanel" hidden>
+  <h2>Manpower agent rates</h2>
+  <p class="muted">LKR per operation for the selected report month. A zero rate must be entered explicitly.</p>
+  <form class="controls" id="rateForm">
+    <label>Agent<select id="rateAgent" required></select></label>
+    <label>Vehicle type<select id="rateVehicle" required></select></label>
+    <label>Operation<select id="rateDirection"><option value="loading">Loading</option><option value="unloading">Unloading</option></select></label>
+    <label>Rate (LKR)<input id="rateAmount" type="number" min="0" step=".01" required></label>
+    <button class="primary">Apply rate</button>
+  </form>
+  <p id="rateStatus" role="status"></p>
+</section>
+<section class="panel" id="importPanel">
+  <h2>Import Labour Working Summary</h2>
+  <p class="muted">Select the month before importing. Only operations that start in that month are included.</p>
+  <form class="controls" id="importForm"><label>Upload month<input id="uploadMonth" type="month" required></label><label>Excel workbook<input id="workbook" type="file" accept=".xlsx" required></label><button id="importButton" class="primary">Preview import</button></form>
+  <p id="importStatus" role="status"></p>
+  <p id="lastUpload" class="muted">No shared upload for this month.</p>
+  <details id="issues" hidden><summary>Import issues</summary><ul id="issueList"></ul></details>
+  <button id="saveMonth" type="button" hidden>Save month to Supabase</button>
+</section>
+</main>
+<dialog id="operation" aria-labelledby="operationTitle"><form method="dialog"><button>Close</button></form><h2 id="operationTitle"></h2><dl id="detail"></dl></dialog>
+<dialog id="departmentReport" aria-labelledby="departmentReportTitle">
+  <div class="section-head"><h2 id="departmentReportTitle">Department Report</h2><form method="dialog"><button>Close</button></form></div>
+  <p class="muted" id="departmentReportScope"></p>
+  <div class="department-narrative" id="departmentNarrative"></div>
+  <button id="readDepartmentReport" type="button" class="primary">Listen to summary</button>
+  <p id="departmentVoiceStatus" class="muted" role="status"></p>
+</dialog>
+<dialog id="efficiency" class="efficiency" aria-labelledby="efficiencyTitle">
+  <div class="section-head"><h2 id="efficiencyTitle">Labour Efficiency</h2><form method="dialog"><button>Close</button></form></div>
+  <p id="efficiencyScope" class="muted"></p>
+  <p class="muted">Ranked by recorded work hours. Idle hours use monthly paid hours less recorded day hours for the full imported month. Unallocated time can include work outside this report.</p>
+  <p id="efficiencyStatus" class="muted" role="status"></p>
+  <div class="scroll" tabindex="0" aria-label="Labour efficiency ranking"><table><thead><tr>
+    <th scope="col">Rank</th><th scope="col">EPF</th><th scope="col">Role</th><th scope="col">Work hours</th><th scope="col">Day</th><th scope="col">OT</th><th scope="col">Idle / unallocated</th><th scope="col">Loading</th><th scope="col">Unloading</th><th scope="col">Total vehicles</th><th scope="col">Labour cost</th>
+  </tr></thead><tbody id="efficiencyRows"></tbody></table></div>
+</dialog>
+<dialog id="employee" class="employee" aria-labelledby="employeeTitle">
+  <div class="section-head"><h2 id="employeeTitle">Employee profile</h2><form method="dialog"><button>Close</button></form></div>
+  <div class="portrait-ring"><img id="employeePhoto" alt="Employee photo" hidden><span id="employeeInitials"></span></div>
+  <h3 id="employeeName"></h3><p id="employeeEpf"></p>
+  <dl id="employeeNumbers"></dl>
+  <form id="photoForm" hidden><label>Employee photo<input id="photoFile" type="file" accept="image/jpeg,image/png,image/webp" required></label><button class="primary">Save photo</button><p id="photoStatus" role="status"></p></form>
+</dialog>
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+<script src="./jszip.min.js"></script>
+<script src="./excel-workbook.js"></script>
+<script src="./labour-import.js"></script>
+<script src="./labour-shared.js"></script>
+<script src="./labour-efficiency.js"></script>
+<script src="./labour-register.js"></script>
+</body>
+</html>
